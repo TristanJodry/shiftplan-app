@@ -26,7 +26,7 @@ const App: React.FC = () => {
     return 'solid';
   });
 
-  // Display Preferences State (Weekends only - Background is now shared)
+  // Display Preferences State
   const [showWeekends, setShowWeekends] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('showWeekends');
@@ -44,6 +44,16 @@ const App: React.FC = () => {
     return [];
   });
 
+  // Local User Order State (Persisted in LocalStorage)
+  const [userOrder, setUserOrder] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('userOrder');
+      return stored ? JSON.parse(stored) : [];
+    }
+    return [];
+  });
+
+  // Background Opacity for the Planning Grid
   const [bgOpacity, setBgOpacity] = useState<number>(() => {
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('bgOpacity');
@@ -63,24 +73,12 @@ const App: React.FC = () => {
     localStorage.setItem('theme', theme);
   }, [theme]);
 
-  // Persist Local Display Preferences
-  useEffect(() => {
-    localStorage.setItem('showWeekends', String(showWeekends));
-  }, [showWeekends]);
-
-  useEffect(() => {
-    localStorage.setItem('bgOpacity', String(bgOpacity));
-  }, [bgOpacity]);
-
-  // Persist Hidden Users
-  useEffect(() => {
-    localStorage.setItem('hiddenUserIds', JSON.stringify(hiddenUserIds));
-  }, [hiddenUserIds]);
-
-  // Persist Module Theme
-  useEffect(() => {
-    localStorage.setItem('moduleTheme', moduleTheme);
-  }, [moduleTheme]);
+  // Persist Local Settings
+  useEffect(() => { localStorage.setItem('showWeekends', String(showWeekends)); }, [showWeekends]);
+  useEffect(() => { localStorage.setItem('bgOpacity', String(bgOpacity)); }, [bgOpacity]);
+  useEffect(() => { localStorage.setItem('hiddenUserIds', JSON.stringify(hiddenUserIds)); }, [hiddenUserIds]);
+  useEffect(() => { localStorage.setItem('moduleTheme', moduleTheme); }, [moduleTheme]);
+  useEffect(() => { localStorage.setItem('userOrder', JSON.stringify(userOrder)); }, [userOrder]);
 
   const toggleTheme = () => {
     setTheme(prev => prev === 'light' ? 'dark' : 'light');
@@ -96,13 +94,48 @@ const App: React.FC = () => {
 
   const {
     loading, error,
-    users, addUser, removeUser, updateUser, reorderUser,
+    users, addUser, removeUser, updateUser, // Don't use reorderUser from hook anymore
     templates, addTemplate, removeTemplate, updateTemplate,
     holidays, toggleHoliday, moveAssignment,
     getAssignment, 
-    backgroundImage, setBackgroundImage, // Shared background state
+    backgroundImage, setBackgroundImage,
     toggleAssignmentTemplate, updateAssignmentText, clearAssignment, replaceAssignment
   } = usePlanner();
+
+  // Local Reorder Logic
+  const handleLocalReorderUser = (id: string, direction: 'up' | 'down') => {
+    let currentOrder = [...userOrder];
+    // Ensure all current users are in the order list (init if needed)
+    const missing = users.filter(u => !currentOrder.includes(u.id)).map(u => u.id);
+    if (missing.length > 0) {
+        currentOrder = [...currentOrder, ...missing];
+    }
+
+    const index = currentOrder.indexOf(id);
+    if (index === -1) return;
+    
+    const newIndex = direction === 'up' ? index - 1 : index + 1;
+    if (newIndex < 0 || newIndex >= currentOrder.length) return;
+
+    // Swap
+    [currentOrder[index], currentOrder[newIndex]] = [currentOrder[newIndex], currentOrder[index]];
+    setUserOrder(currentOrder);
+  };
+
+  // Sort users based on local preference
+  const sortedUsers = React.useMemo(() => {
+    if (!users) return [];
+    return [...users].sort((a, b) => {
+        let indexA = userOrder.indexOf(a.id);
+        let indexB = userOrder.indexOf(b.id);
+        
+        // If not found in order list, append to end
+        if (indexA === -1) indexA = 9999;
+        if (indexB === -1) indexB = 9999;
+        
+        return indexA - indexB;
+    });
+  }, [users, userOrder]);
 
   if (loading) {
     return (
@@ -123,13 +156,7 @@ const App: React.FC = () => {
         backgroundRepeat: 'no-repeat'
       } : {}}
     >
-      {/* Background Overlay to ensure readability if image is set */}
-      {backgroundImage && (
-        <div 
-          className="absolute inset-0 z-0 bg-slate-100 dark:bg-slate-950 transition-opacity duration-200 pointer-events-none"
-          style={{ opacity: bgOpacity }}
-        ></div>
-      )}
+      {/* Note: Overlay div removed to allow transparency control via CalendarGrid */}
 
       {/* Top Navigation Bar */}
       <nav className="bg-white/90 dark:bg-slate-900/90 border-b dark:border-slate-800 px-6 py-3 flex items-center justify-between shadow-sm z-20 transition-colors backdrop-blur-md">
@@ -148,7 +175,6 @@ const App: React.FC = () => {
         </div>
         
         <div className="flex items-center gap-2 md:gap-4">
-           {/* Display Settings Toggle */}
            <button 
              onClick={() => setIsDisplaySettingsOpen(true)}
              className="p-2 rounded-full text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 transition-colors"
@@ -157,7 +183,6 @@ const App: React.FC = () => {
              <Layout className="w-5 h-5" />
            </button>
 
-           {/* Dark Mode Toggle */}
            <button 
              onClick={toggleTheme}
              className="p-2 rounded-full text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 transition-colors"
@@ -190,12 +215,14 @@ const App: React.FC = () => {
           <CalendarGrid 
               currentDate={currentDate}
               onDateChange={setCurrentDate}
-              users={users}
+              users={sortedUsers} // Pass sorted users
               hiddenUserIds={hiddenUserIds}
               templates={templates}
               holidays={holidays}
               showWeekends={showWeekends}
-              moduleTheme={moduleTheme} // Pass theme preference
+              moduleTheme={moduleTheme}
+              bgOpacity={bgOpacity} // Pass opacity for transparency
+              theme={theme} // Pass theme for color calculation
               getAssignment={getAssignment}
               onToggleTemplate={toggleAssignmentTemplate}
               onUpdateText={updateAssignmentText}
@@ -211,15 +238,15 @@ const App: React.FC = () => {
       {/* Admin Modal */}
       {isAdminOpen && (
         <AdminPanel 
-          users={users}
+          users={sortedUsers} // Pass sorted users to admin list
           hiddenUserIds={hiddenUserIds} 
           onToggleVisibility={toggleUserVisibility} 
           templates={templates}
-          moduleTheme={moduleTheme} // Pass theme preference to admin for consistency
+          moduleTheme={moduleTheme} 
           onAddUser={addUser}
           onRemoveUser={removeUser}
           onUpdateUser={updateUser}
-          onReorderUser={reorderUser}
+          onReorderUser={handleLocalReorderUser} // Pass LOCAL reorder function
           onAddTemplate={addTemplate}
           onRemoveTemplate={removeTemplate}
           onUpdateTemplate={updateTemplate}
@@ -232,8 +259,8 @@ const App: React.FC = () => {
         <DisplaySettings
           showWeekends={showWeekends}
           onToggleWeekends={setShowWeekends}
-          moduleTheme={moduleTheme} // Pass state
-          onSetModuleTheme={setModuleTheme} // Pass setter
+          moduleTheme={moduleTheme} 
+          onSetModuleTheme={setModuleTheme}
           backgroundImage={backgroundImage}
           onSetBackgroundImage={setBackgroundImage}
           bgOpacity={bgOpacity}

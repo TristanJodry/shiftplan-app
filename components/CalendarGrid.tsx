@@ -8,11 +8,13 @@ interface CalendarGridProps {
   currentDate: Date;
   onDateChange: (d: Date) => void;
   users: User[];
-  hiddenUserIds: string[]; // List of IDs to hide locally
+  hiddenUserIds: string[];
   templates: ShiftTemplate[];
   holidays: string[];
   showWeekends: boolean;
   moduleTheme: 'solid' | 'pastel';
+  bgOpacity: number; // New prop for transparency
+  theme: 'light' | 'dark'; // New prop for color calculation
   getAssignment: (userId: string, date: Date) => Assignment | undefined;
   onToggleTemplate: (userId: string, date: Date, templateId: string) => void;
   onUpdateText: (userId: string, date: Date, text: string) => void;
@@ -24,11 +26,11 @@ interface CalendarGridProps {
 }
 
 export const CalendarGrid: React.FC<CalendarGridProps> = ({
-  currentDate, onDateChange, users, hiddenUserIds = [], templates, holidays, showWeekends, moduleTheme = 'solid', getAssignment, onToggleTemplate, onUpdateText, onReplace, onClear, onMoveAssignment, onToggleHoliday, onOpenAdmin
+  currentDate, onDateChange, users, hiddenUserIds = [], templates, holidays, showWeekends, moduleTheme = 'solid', bgOpacity = 0.95, theme = 'light', getAssignment, onToggleTemplate, onUpdateText, onReplace, onClear, onMoveAssignment, onToggleHoliday, onOpenAdmin
 }) => {
   const startOfWeek = getStartOfWeek(currentDate);
   
-  // Filter visible users (safety check for hiddenUserIds array)
+  // Filter visible users
   const safeHiddenIds = Array.isArray(hiddenUserIds) ? hiddenUserIds : [];
   const visibleUsers = users.filter(user => !safeHiddenIds.includes(user.id));
 
@@ -36,7 +38,7 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(startOfWeek, i)).filter(date => {
       if (showWeekends) return true;
       const day = date.getDay();
-      return day !== 0 && day !== 6; // 0 = Sunday, 6 = Saturday
+      return day !== 0 && day !== 6;
   });
 
   const todayISO = formatDateISO(new Date());
@@ -84,41 +86,19 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
     const target = e.currentTarget as HTMLElement;
     const rect = target.getBoundingClientRect();
     
-    // Popover fixed size approx
+    // Popover placement logic...
     const popW = 300; 
     const popH = 450;
-    
-    // Calculate Position: Try to place it under the cell, aligned left
     let x = rect.left;
     let y = rect.bottom + 5;
-
-    // Check Right Edge
-    if (x + popW > window.innerWidth) {
-        // Align to right edge of screen if minimal padding
-        x = window.innerWidth - popW - 10;
-    }
-    // Check Left Edge
+    if (x + popW > window.innerWidth) x = window.innerWidth - popW - 10;
     if (x < 10) x = 10;
-
-    // Check Bottom Edge
     if (y + popH > window.innerHeight) {
-        // Place above if no space below
         y = rect.top - popH - 5;
-        // If still off screen top, just pin to bottom
-        if (y < 0) {
-           y = window.innerHeight - popH - 10;
-        }
+        if (y < 0) y = window.innerHeight - popH - 10;
     }
 
-    setPopover({
-      isOpen: true,
-      userId,
-      date,
-      x: x,
-      y: y,
-      width: popW,
-      height: popH
-    });
+    setPopover({ isOpen: true, userId, date, x, y, width: popW, height: popH });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent, userId: string, date: Date) => {
@@ -133,20 +113,12 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
     if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
         e.preventDefault();
         const assignment = getAssignment(userId, date);
-        if (assignment) {
-            setClipboard({
-                templateIds: assignment.templateIds,
-                customText: assignment.customText || ''
-            });
-        } else {
-            setClipboard(null);
-        }
+        if (assignment) setClipboard({ templateIds: assignment.templateIds, customText: assignment.customText || '' });
+        else setClipboard(null);
     }
     if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
         e.preventDefault();
-        if (clipboard) {
-            onReplace(userId, date, clipboard.templateIds, clipboard.customText);
-        }
+        if (clipboard) onReplace(userId, date, clipboard.templateIds, clipboard.customText);
     }
   };
 
@@ -165,13 +137,11 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
     }
     e.dataTransfer.setData('application/json', JSON.stringify({ userId, date: formatDateISO(date) }));
     e.dataTransfer.effectAllowed = 'move';
-    const target = e.currentTarget as HTMLElement;
-    target.style.opacity = '0.5';
+    (e.currentTarget as HTMLElement).style.opacity = '0.5';
   };
 
   const handleDragEnd = (e: React.DragEvent) => {
-    const target = e.currentTarget as HTMLElement;
-    target.style.opacity = '1';
+    (e.currentTarget as HTMLElement).style.opacity = '1';
     setDragOverCell(null);
   };
 
@@ -190,17 +160,28 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
     try {
         const data = JSON.parse(e.dataTransfer.getData('application/json'));
         if (data && data.userId && data.date) {
-            const sourceDate = new Date(data.date);
-            onMoveAssignment(data.userId, sourceDate, targetUserId, targetDate);
+            onMoveAssignment(data.userId, new Date(data.date), targetUserId, targetDate);
         }
-    } catch (err) {
-        console.error("Drop failed", err);
-    }
+    } catch (err) { console.error("Drop failed", err); }
   };
 
+  // Dynamic Background Styles
+  const bgBaseColor = theme === 'dark' ? `30, 41, 59` : `255, 255, 255`; // Slate-800 or White
+  const bgStyle = { backgroundColor: `rgba(${bgBaseColor}, ${bgOpacity})` };
+  // Header background slightly more opaque or same? Using same for transparency effect.
+  // Actually headers need to hide scrolling content, but user wants transparency.
+  // We use the same transparency. Content behind might be visible.
+  
+  // Header row style (slate-100 or slate-900 usually)
+  const headerBaseColor = theme === 'dark' ? `15, 23, 42` : `241, 245, 249`; // Slate-900 or Slate-100
+  const headerStyle = { backgroundColor: `rgba(${headerBaseColor}, ${bgOpacity})` };
+
   return (
-    <div className="flex flex-col h-full bg-white/95 dark:bg-slate-800/95 shadow-sm border dark:border-slate-700 rounded-xl overflow-hidden transition-colors backdrop-blur-sm">
-      <div className="flex flex-col sm:flex-row items-center justify-between p-4 border-b dark:border-slate-700 bg-white/50 dark:bg-slate-800/50 transition-colors gap-3">
+    <div 
+      className="flex flex-col h-full shadow-sm border dark:border-slate-700 rounded-xl overflow-hidden transition-colors backdrop-blur-sm"
+      style={bgStyle} // Apply opacity to main container
+    >
+      <div className="flex flex-col sm:flex-row items-center justify-between p-4 border-b dark:border-slate-700 transition-colors gap-3" style={headerStyle}>
         <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-start">
           <div className="flex bg-slate-100 dark:bg-slate-700 rounded-lg p-1 border border-slate-200 dark:border-slate-600">
             <button onClick={() => onDateChange(addDays(currentDate, -7))} className="p-1 hover:bg-white dark:hover:bg-slate-600 hover:shadow-sm rounded-md transition-all text-slate-600 dark:text-slate-300"><ChevronLeft className="w-5 h-5" /></button>
@@ -221,18 +202,19 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
 
       <div className="flex-1 overflow-auto relative touch-pan-x touch-pan-y">
         <table className="w-full border-collapse min-w-[800px] md:min-w-[1000px]">
-          {/* Header upgraded to Z-40 to stay above everything else */}
-          <thead className="bg-slate-100 dark:bg-slate-900 sticky top-0 z-40 shadow-sm">
+          <thead className="sticky top-0 z-40 shadow-sm" style={headerStyle}>
             <tr>
-              <th className="p-4 text-left border-b border-r dark:border-slate-700 w-48 md:w-64 bg-slate-100 dark:bg-slate-900 sticky left-0 z-50">
+              <th className="p-4 text-left border-b border-r dark:border-slate-700 w-48 md:w-64 sticky left-0 z-50" style={headerStyle}>
                 <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Membres</span>
               </th>
               {weekDays.map((date) => {
                 const dateISO = formatDateISO(date);
                 const isToday = dateISO === todayISO;
                 const isHoliday = holidays.includes(dateISO);
+                // Header cells normally have specific colors for today/holiday, we mix them with opacity style if needed or rely on CSS classes and accept standard opacity
+                // To support transparency properly, we use the headerStyle as base and let the inner divs handle highlighting
                 return (
-                  <th key={dateISO} className={`p-3 text-center border-b border-r dark:border-slate-700 min-w-[100px] md:min-w-[120px] relative overflow-hidden ${isToday ? 'bg-blue-50/50 dark:bg-blue-900/20' : ''} ${isHoliday ? 'bg-red-50 dark:bg-red-900/20' : ''}`}>
+                  <th key={dateISO} className={`p-3 text-center border-b border-r dark:border-slate-700 min-w-[100px] md:min-w-[120px] relative overflow-hidden ${isToday ? 'bg-blue-50/50 dark:bg-blue-900/20' : ''} ${isHoliday ? 'bg-red-50 dark:bg-red-900/20' : ''}`} style={(!isToday && !isHoliday) ? headerStyle : undefined}>
                     <div className="flex flex-col items-center justify-center relative z-10">
                       <span className={`text-xs uppercase font-bold mb-1 ${isToday ? 'text-blue-600 dark:text-blue-400' : isHoliday ? 'text-red-600 dark:text-red-400' : 'text-slate-400 dark:text-slate-500'}`}>
                         {new Intl.DateTimeFormat('fr-FR', { weekday: 'short' }).format(date)}
@@ -249,7 +231,7 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
           <tbody>
             {visibleUsers.map((user) => (
               <tr key={user.id} className="group hover:bg-slate-50/50 dark:hover:bg-slate-700/30 transition-colors">
-                <td className="p-4 border-b border-r dark:border-slate-700 bg-white/95 dark:bg-slate-800/95 sticky left-0 z-30 group-hover:bg-slate-50/95 dark:group-hover:bg-slate-700/95 border-r-slate-200 dark:border-r-slate-700 transition-colors">
+                <td className="p-4 border-b border-r dark:border-slate-700 sticky left-0 z-30 group-hover:bg-slate-50/95 dark:group-hover:bg-slate-700/95 border-r-slate-200 dark:border-r-slate-700 transition-colors" style={bgStyle}>
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center font-bold shadow-sm text-xs md:text-sm">{user.name.charAt(0)}</div>
                     <div className="min-w-0"><div className="font-semibold text-slate-900 dark:text-slate-100 text-xs md:text-sm truncate">{user.name}</div><div className="text-[10px] md:text-xs text-slate-500 dark:text-slate-400 truncate">{user.role}</div></div>
@@ -267,14 +249,14 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                   const isDragOver = dragOverCell?.userId === user.id && dragOverCell?.dateStr === dateISO;
 
                   return (
-                    <td key={dateISO} className={`p-1 border-b border-r dark:border-slate-700 cursor-pointer relative transition-all align-top h-20 md:h-24 outline-none ${isToday ? 'bg-blue-50/10 dark:bg-blue-900/10' : ''} ${isHoliday ? 'bg-red-50/30 dark:bg-red-900/10' : ''} ${isDragOver ? 'bg-blue-100 dark:bg-blue-800/50 ring-2 ring-inset ring-blue-400' : 'focus:bg-blue-50/30 dark:focus:bg-blue-900/20'}`} onClick={(e) => handleCellClick(e, user.id, date)} onDoubleClick={(e) => handleCellDoubleClick(e, user.id, date)} onKeyDown={(e) => handleKeyDown(e, user.id, date)} onDragOver={(e) => handleDragOver(e, user.id, date)} onDrop={(e) => handleDrop(e, user.id, date)} tabIndex={0}>
+                    <td key={dateISO} className={`p-1 border-b border-r dark:border-slate-700 cursor-pointer relative transition-all align-top h-20 md:h-24 outline-none ${isToday ? 'bg-blue-50/10 dark:bg-blue-900/10' : ''} ${isHoliday ? 'bg-red-50/30 dark:bg-red-900/10' : ''} ${isDragOver ? 'bg-blue-100 dark:bg-blue-800/50 ring-2 ring-inset ring-blue-400' : 'focus:bg-blue-50/30 dark:focus:bg-blue-900/20'}`} style={(!isToday && !isHoliday && !isDragOver) ? bgStyle : undefined} onClick={(e) => handleCellClick(e, user.id, date)} onDoubleClick={(e) => handleCellDoubleClick(e, user.id, date)} onKeyDown={(e) => handleKeyDown(e, user.id, date)} onDragOver={(e) => handleDragOver(e, user.id, date)} onDrop={(e) => handleDrop(e, user.id, date)} tabIndex={0}>
                         <div className={`w-full h-full min-h-[4rem] rounded-md transition-all flex flex-col overflow-hidden relative z-10 ${isSelected ? 'ring-2 ring-blue-500 z-10' : ''} ${isEmpty ? 'border-2 border-dashed border-transparent hover:border-blue-200 dark:hover:border-slate-600' : 'bg-white dark:bg-slate-700 shadow-sm border border-slate-200 dark:border-slate-600'}`} draggable={!isEmpty} onDragStart={(e) => handleDragStart(e, user.id, date)} onDragEnd={handleDragEnd}>
                         {isEmpty ? (<div className="w-full h-full flex items-center justify-center"><Plus className={`w-5 h-5 text-slate-300 dark:text-slate-600 ${isSelected ? 'text-blue-400' : ''}`} /></div>) : (
                           <><div className="flex-1 flex flex-col w-full h-full">
                                 {activeTemplateIds.map(tid => {
                                     const tpl = templates.find(t => t.id === tid);
                                     if (!tpl) return null;
-                                    const tplClass = getModuleClasses(tpl.color, moduleTheme); // Apply theme here
+                                    const tplClass = getModuleClasses(tpl.color, moduleTheme);
                                     return (<div key={tid} className={`flex-1 flex items-center justify-center px-1 md:px-2 text-[10px] md:text-xs font-bold ${tplClass} w-full border-b border-black/10 last:border-0`} title={tpl.label}><span className="truncate text-center shadow-sm">{tpl.label}</span></div>);
                                 })}
                             </div>
@@ -321,7 +303,7 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
             {templates.map(tpl => {
                const assignment = getAssignment(popover.userId!, popover.date!);
                const isSelected = assignment?.templateIds.includes(tpl.id);
-               const tplClass = getModuleClasses(tpl.color, moduleTheme); // Apply theme here
+               const tplClass = getModuleClasses(tpl.color, moduleTheme);
                return (
                   <button key={tpl.id} onClick={() => onToggleTemplate(popover.userId!, popover.date!, tpl.id)} className={`w-full text-left p-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 group border ${isSelected ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700' : 'border-transparent hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
                     <div className={`w-4 h-4 rounded flex items-center justify-center border ${isSelected ? 'bg-blue-600 border-blue-600' : 'border-slate-300 dark:border-slate-500 bg-white dark:bg-slate-700'}`}>{isSelected && <Check className="w-3 h-3 text-white" />}</div>
