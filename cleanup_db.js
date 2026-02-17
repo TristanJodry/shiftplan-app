@@ -1,0 +1,1 @@
+// Ce fichier est obsolète. Veuillez utiliser cleanup.sh à la place.
