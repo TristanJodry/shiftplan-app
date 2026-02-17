@@ -42,8 +42,11 @@ const PASTEL_MAP: Record<string, string> = {
 
 /**
  * Transforms the stored color class into the requested theme (Solid vs Pastel)
+ * Added safety check for undefined/null inputs.
  */
-export const getModuleClasses = (originalClasses: string, theme: 'solid' | 'pastel'): string => {
+export const getModuleClasses = (originalClasses: string | undefined | null, theme: 'solid' | 'pastel' = 'solid'): string => {
+  if (!originalClasses) return 'bg-slate-200 text-slate-800 border-slate-300'; // Fallback safely
+  
   if (theme === 'solid') return originalClasses;
 
   // Find the key in the original class string (e.g. "bg-blue-600")

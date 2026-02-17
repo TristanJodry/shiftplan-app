@@ -24,12 +24,13 @@ interface CalendarGridProps {
 }
 
 export const CalendarGrid: React.FC<CalendarGridProps> = ({
-  currentDate, onDateChange, users, hiddenUserIds, templates, holidays, showWeekends, moduleTheme, getAssignment, onToggleTemplate, onUpdateText, onReplace, onClear, onMoveAssignment, onToggleHoliday, onOpenAdmin
+  currentDate, onDateChange, users, hiddenUserIds = [], templates, holidays, showWeekends, moduleTheme = 'solid', getAssignment, onToggleTemplate, onUpdateText, onReplace, onClear, onMoveAssignment, onToggleHoliday, onOpenAdmin
 }) => {
   const startOfWeek = getStartOfWeek(currentDate);
   
-  // Filter visible users
-  const visibleUsers = users.filter(user => !hiddenUserIds.includes(user.id));
+  // Filter visible users (safety check for hiddenUserIds array)
+  const safeHiddenIds = Array.isArray(hiddenUserIds) ? hiddenUserIds : [];
+  const visibleUsers = users.filter(user => !safeHiddenIds.includes(user.id));
 
   // Calculate days to show
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(startOfWeek, i)).filter(date => {

@@ -6,10 +6,10 @@ import { generateId } from '../utils/idUtils';
 
 interface AdminPanelProps {
   users: User[];
-  hiddenUserIds: string[]; // List of locally hidden users
-  onToggleVisibility: (userId: string) => void; // Function to toggle visibility
+  hiddenUserIds: string[]; 
+  onToggleVisibility: (userId: string) => void;
   templates: ShiftTemplate[];
-  moduleTheme: 'solid' | 'pastel'; // Add theme prop
+  moduleTheme: 'solid' | 'pastel';
   onAddUser: (u: User) => void;
   onRemoveUser: (id: string) => void;
   onUpdateUser: (u: User) => void;
@@ -21,7 +21,19 @@ interface AdminPanelProps {
 }
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({
-  users, hiddenUserIds, onToggleVisibility, templates, moduleTheme, onAddUser, onRemoveUser, onUpdateUser, onReorderUser, onAddTemplate, onRemoveTemplate, onUpdateTemplate, onClose
+  users = [], 
+  hiddenUserIds = [], 
+  onToggleVisibility, 
+  templates = [], 
+  moduleTheme = 'solid', 
+  onAddUser, 
+  onRemoveUser, 
+  onUpdateUser, 
+  onReorderUser, 
+  onAddTemplate, 
+  onRemoveTemplate, 
+  onUpdateTemplate, 
+  onClose
 }) => {
   const [activeTab, setActiveTab] = useState<'users' | 'templates'>('users');
   
@@ -31,7 +43,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [newTplLabel, setNewTplLabel] = useState('');
-  const [newTplColor, setNewTplColor] = useState(COLORS[0].value);
+  const [newTplColor, setNewTplColor] = useState(COLORS[0]?.value || 'bg-blue-600 text-white border-blue-700');
   const [newTplDesc, setNewTplDesc] = useState('');
 
   const startEditUser = (user: User) => {
@@ -78,7 +90,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const cancelEditTemplate = () => {
     setEditingTemplateId(null);
     setNewTplLabel('');
-    setNewTplColor(COLORS[0].value);
+    setNewTplColor(COLORS[0]?.value || 'bg-blue-600 text-white border-blue-700');
     setNewTplDesc('');
   };
 
@@ -107,9 +119,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setNewTplLabel('');
     setNewTplDesc('');
     if (editingTemplateId) {
-        setNewTplColor(COLORS[0].value);
+        setNewTplColor(COLORS[0]?.value || 'bg-blue-600 text-white border-blue-700');
     }
   };
+
+  // Safe check for hiddenUserIds to avoid crash if undefined
+  const safeHiddenIds = Array.isArray(hiddenUserIds) ? hiddenUserIds : [];
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
@@ -179,7 +194,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
               <div className="space-y-2">
                 {users.map((user, index) => {
-                    const isHidden = hiddenUserIds.includes(user.id);
+                    const isHidden = safeHiddenIds.includes(user.id);
                     return (
                         <div key={user.id} className={`flex flex-col sm:flex-row sm:items-center justify-between p-3 border dark:border-slate-700 rounded-lg hover:shadow-sm transition-all gap-3 ${editingUserId === user.id ? 'ring-2 ring-amber-400 bg-amber-50 dark:bg-amber-900/20' : 'bg-white dark:bg-slate-700/50'} ${isHidden ? 'opacity-60 grayscale' : ''}`}>
                             <div className="flex items-center gap-3">
@@ -308,11 +323,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {templates.map(tpl => {
                     const tplClass = getModuleClasses(tpl.color, moduleTheme);
+                    const safeBorder = tplClass.includes('bg-') ? tplClass.replace('bg-', 'border-').split(' ')[0] : 'border-slate-300';
+                    const safeDot = tplClass.split(' ')[0] || 'bg-slate-400';
                     return (
-                        <div key={tpl.id} className={`flex items-center justify-between p-3 border dark:border-slate-600 rounded-lg hover:shadow-sm transition-all border-l-4 dark:bg-slate-700/30 ${tplClass.replace('bg-', 'border-').split(' ')[0]} ${editingTemplateId === tpl.id ? 'ring-2 ring-amber-400 bg-amber-50 dark:bg-amber-900/20' : ''}`}>
+                        <div key={tpl.id} className={`flex items-center justify-between p-3 border dark:border-slate-600 rounded-lg hover:shadow-sm transition-all border-l-4 dark:bg-slate-700/30 ${safeBorder} ${editingTemplateId === tpl.id ? 'ring-2 ring-amber-400 bg-amber-50 dark:bg-amber-900/20' : ''}`}>
                             <div className="flex-1">
                             <div className="flex items-center gap-2">
-                                <span className={`w-3 h-3 rounded-full ${tplClass.split(' ')[0]}`}></span>
+                                <span className={`w-3 h-3 rounded-full ${safeDot}`}></span>
                                 <span className="font-bold text-slate-800 dark:text-slate-100">{tpl.label}</span>
                             </div>
                             {tpl.description && <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">{tpl.description}</div>}
