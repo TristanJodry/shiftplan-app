@@ -33,29 +33,37 @@ export const DisplaySettings: React.FC<DisplaySettingsProps> = ({
     }
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 2 * 1024 * 1024) { // Limit to 2MB
-        setUploadError("L'image est trop lourde (Max 2Mo)");
+    // Check file type
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg'];
+    if (!allowedTypes.includes(file.type)) {
+        setUploadError("Format non supporté. Utilisez PNG ou JPEG.");
         return;
     }
 
-    const reader = new FileReader();
-    reader.onloadend = () => {
-        const result = reader.result as string;
-        try {
-            onSetBackgroundImage(result);
-            setUploadError(null);
-        } catch (err) {
-            setUploadError("Erreur lors de la sauvegarde.");
+    const formData = new FormData();
+    formData.append('image', file);
+
+    try {
+        const response = await fetch('/api/upload-bg', {
+            method: 'POST',
+            body: formData,
+        });
+
+        if (!response.ok) {
+            const data = await response.json();
+            throw new Error(data.error || "Erreur lors de l'upload");
         }
-    };
-    reader.onerror = () => {
-        setUploadError("Erreur lors de la lecture du fichier.");
-    };
-    reader.readAsDataURL(file);
+
+        const data = await response.json();
+        onSetBackgroundImage(data.url);
+        setUploadError(null);
+    } catch (err: any) {
+        setUploadError(err.message || "Erreur lors de la sauvegarde.");
+    }
   };
 
   return (
@@ -160,8 +168,8 @@ export const DisplaySettings: React.FC<DisplaySettingsProps> = ({
             <div className="space-y-2">
                 <label className="flex items-center justify-center w-full px-4 py-2 bg-white dark:bg-slate-800 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg cursor-pointer hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-slate-700 transition-colors gap-2 text-sm font-medium text-slate-600 dark:text-slate-300">
                     <Upload className="w-4 h-4" />
-                    Importer une image (Max 2Mo)
-                    <input type="file" className="hidden" accept="image/png, image/jpeg, image/webp" onChange={handleFileUpload} />
+                    Importer une image (PNG, JPG, JPEG)
+                    <input type="file" className="hidden" accept="image/png, image/jpeg, image/jpg" onChange={handleFileUpload} />
                 </label>
                 {uploadError && (
                     <div className="text-xs text-red-500 flex items-center gap-1">

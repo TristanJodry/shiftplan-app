@@ -173,8 +173,9 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
   // We use the same transparency. Content behind might be visible.
   
   // Header row style (slate-100 or slate-900 usually)
-  const headerBaseColor = theme === 'dark' ? `15, 23, 42` : `241, 245, 249`; // Slate-900 or Slate-100
-  const headerStyle = { backgroundColor: `rgba(${headerBaseColor}, ${bgOpacity})` };
+  const headerBaseColor = theme === 'dark' ? `15, 23, 42` : `255, 255, 255`; 
+  const headerStyle = { backgroundColor: `rgba(${headerBaseColor}, 1)` }; // Opaque to hide scrolling content
+  const stickyColumnStyle = { backgroundColor: `rgba(${bgBaseColor}, 1)` }; // Opaque for the members column
 
   return (
     <div 
@@ -202,9 +203,9 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
 
       <div className="flex-1 overflow-auto relative touch-pan-x touch-pan-y">
         <table className="w-full border-collapse min-w-[800px] md:min-w-[1000px]">
-          <thead className="sticky top-0 z-40 shadow-sm" style={headerStyle}>
+          <thead className="sticky top-0 z-40 shadow-sm backdrop-blur-md" style={headerStyle}>
             <tr>
-              <th className="p-4 text-left border-b border-r dark:border-slate-700 w-48 md:w-64 sticky left-0 z-50" style={headerStyle}>
+              <th className="p-4 text-left border-b border-r dark:border-slate-700 w-48 md:w-64 sticky left-0 z-50 backdrop-blur-md" style={headerStyle}>
                 <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Membres</span>
               </th>
               {weekDays.map((date) => {
@@ -214,7 +215,11 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                 // Header cells normally have specific colors for today/holiday, we mix them with opacity style if needed or rely on CSS classes and accept standard opacity
                 // To support transparency properly, we use the headerStyle as base and let the inner divs handle highlighting
                 return (
-                  <th key={dateISO} className={`p-3 text-center border-b border-r dark:border-slate-700 min-w-[100px] md:min-w-[120px] relative overflow-hidden ${isToday ? 'bg-blue-50/50 dark:bg-blue-900/20' : ''} ${isHoliday ? 'bg-red-50 dark:bg-red-900/20' : ''}`} style={(!isToday && !isHoliday) ? headerStyle : undefined}>
+                  <th 
+                    key={dateISO} 
+                    className={`p-3 text-center border-b border-r dark:border-slate-700 min-w-[100px] md:min-w-[120px] relative overflow-hidden transition-colors`} 
+                    style={isToday ? { backgroundColor: theme === 'dark' ? '#1e3a8a' : '#eff6ff' } : isHoliday ? { backgroundColor: theme === 'dark' ? '#7f1d1d' : '#fef2f2' } : headerStyle}
+                  >
                     <div className="flex flex-col items-center justify-center relative z-10">
                       <span className={`text-xs uppercase font-bold mb-1 ${isToday ? 'text-blue-600 dark:text-blue-400' : isHoliday ? 'text-red-600 dark:text-red-400' : 'text-slate-400 dark:text-slate-500'}`}>
                         {new Intl.DateTimeFormat('fr-FR', { weekday: 'short' }).format(date)}
@@ -231,7 +236,7 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
           <tbody>
             {visibleUsers.map((user) => (
               <tr key={user.id} className="group hover:bg-slate-50/50 dark:hover:bg-slate-700/30 transition-colors">
-                <td className="p-4 border-b border-r dark:border-slate-700 sticky left-0 z-30 group-hover:bg-slate-50/95 dark:group-hover:bg-slate-700/95 border-r-slate-200 dark:border-r-slate-700 transition-colors" style={bgStyle}>
+                <td className="p-4 border-b border-r dark:border-slate-700 sticky left-0 z-30 group-hover:bg-slate-50 dark:group-hover:bg-slate-700 border-r-slate-200 dark:border-r-slate-700 transition-colors backdrop-blur-md" style={stickyColumnStyle}>
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center font-bold shadow-sm text-xs md:text-sm">{user.name.charAt(0)}</div>
                     <div className="min-w-0"><div className="font-semibold text-slate-900 dark:text-slate-100 text-xs md:text-sm truncate">{user.name}</div><div className="text-[10px] md:text-xs text-slate-500 dark:text-slate-400 truncate">{user.role}</div></div>

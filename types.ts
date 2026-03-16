@@ -25,3 +25,18 @@ export interface ViewState {
   currentDate: Date;
   isAdminOpen: boolean;
 }
+
+export interface Log {
+  id: string;
+  timestamp: string;
+  userId: string;
+  userName: string;
+  action: string;
+  details: string;
+  targetUserId?: string;
+}
+
+export interface CurrentUser {
+  id: string;
+  name: string;
+}

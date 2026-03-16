@@ -2,13 +2,27 @@ import React, { useState, useEffect } from 'react';
 import { CalendarGrid } from './components/CalendarGrid';
 import { AdminPanel } from './components/AdminPanel';
 import { DisplaySettings } from './components/DisplaySettings';
+import { LoginModal } from './components/LoginModal';
+import { NotificationBell } from './components/NotificationBell';
+import { HistoryModal } from './components/HistoryModal';
 import { usePlanner } from './hooks/usePlanner';
-import { Loader2, AlertCircle, Moon, Sun, Layout } from 'lucide-react';
+import { Loader2, AlertCircle, Moon, Sun, Layout, LogOut } from 'lucide-react';
+import { CurrentUser } from './types';
 
 const App: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isDisplaySettingsOpen, setIsDisplaySettingsOpen] = useState(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  
+  // Current User State (Authentication)
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('currentUser');
+      return stored ? JSON.parse(stored) : null;
+    }
+    return null;
+  });
   
   // Theme State (Dark/Light Mode)
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
@@ -79,6 +93,15 @@ const App: React.FC = () => {
   useEffect(() => { localStorage.setItem('hiddenUserIds', JSON.stringify(hiddenUserIds)); }, [hiddenUserIds]);
   useEffect(() => { localStorage.setItem('moduleTheme', moduleTheme); }, [moduleTheme]);
   useEffect(() => { localStorage.setItem('userOrder', JSON.stringify(userOrder)); }, [userOrder]);
+  
+  // Persist Current User
+  useEffect(() => {
+    if (currentUser) {
+      localStorage.setItem('currentUser', JSON.stringify(currentUser));
+    } else {
+      localStorage.removeItem('currentUser');
+    }
+  }, [currentUser]);
 
   const toggleTheme = () => {
     setTheme(prev => prev === 'light' ? 'dark' : 'light');
@@ -94,13 +117,18 @@ const App: React.FC = () => {
 
   const {
     loading, error,
-    users, addUser, removeUser, updateUser, // Don't use reorderUser from hook anymore
+    users, addUser, removeUser, updateUser,
     templates, addTemplate, removeTemplate, updateTemplate,
     holidays, toggleHoliday, moveAssignment,
     getAssignment, 
     backgroundImage, setBackgroundImage,
-    toggleAssignmentTemplate, updateAssignmentText, clearAssignment, replaceAssignment
-  } = usePlanner();
+    toggleAssignmentTemplate, updateAssignmentText, clearAssignment, replaceAssignment,
+    logs
+  } = usePlanner(currentUser);
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+  };
 
   // Local Reorder Logic
   const handleLocalReorderUser = (id: string, direction: 'up' | 'down') => {
@@ -156,6 +184,13 @@ const App: React.FC = () => {
         backgroundRepeat: 'no-repeat'
       } : {}}
     >
+      {!currentUser && (
+        <LoginModal 
+          users={users} 
+          onLogin={setCurrentUser} 
+          onAddUser={addUser} 
+        />
+      )}
       {/* Note: Overlay div removed to allow transparency control via CalendarGrid */}
 
       {/* Top Navigation Bar */}
@@ -175,6 +210,8 @@ const App: React.FC = () => {
         </div>
         
         <div className="flex items-center gap-2 md:gap-4">
+           <NotificationBell logs={logs} onViewHistory={() => setIsHistoryOpen(true)} />
+
            <button 
              onClick={() => setIsDisplaySettingsOpen(true)}
              className="p-2 rounded-full text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 transition-colors"
@@ -194,10 +231,21 @@ const App: React.FC = () => {
            <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1 hidden md:block"></div>
 
            <div className="text-sm text-slate-500 dark:text-slate-400 hidden md:block">
-              Bienvenue, <strong>Admin</strong>
+              {currentUser ? <span>Connecté: <strong>{currentUser.name}</strong></span> : 'Non connecté'}
            </div>
+           
+           {currentUser && (
+             <button 
+               onClick={handleLogout}
+               className="p-2 rounded-full text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+               title="Se déconnecter"
+             >
+               <LogOut className="w-5 h-5" />
+             </button>
+           )}
+
            <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 border-2 border-white dark:border-slate-600 shadow-sm overflow-hidden hidden md:block">
-             <img src="https://picsum.photos/100/100" alt="Avatar" className="w-full h-full object-cover" />
+             <img src={`https://picsum.photos/seed/${currentUser?.name || 'guest'}/100/100`} alt="Avatar" className="w-full h-full object-cover" />
            </div>
         </div>
       </nav>
@@ -255,6 +303,14 @@ const App: React.FC = () => {
       )}
 
       {/* Display Settings Modal */}
+      {isHistoryOpen && (
+        <HistoryModal 
+          logs={logs} 
+          users={users} 
+          onClose={() => setIsHistoryOpen(false)} 
+        />
+      )}
+
       {isDisplaySettingsOpen && (
         <DisplaySettings
           showWeekends={showWeekends}

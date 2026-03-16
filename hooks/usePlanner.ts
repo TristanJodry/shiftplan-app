@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { User, ShiftTemplate, Assignment } from '../types';
+import { User, ShiftTemplate, Assignment, Log, CurrentUser } from '../types';
 import { formatDateISO } from '../utils/dateUtils';
 import { generateId } from '../utils/idUtils';
 
 // Helper to interact with the Node.js backend
 const API_URL = '/api/db';
+const LOGS_URL = '/api/logs';
 
-export const usePlanner = () => {
+export const usePlanner = (currentUser: CurrentUser | null) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -15,6 +16,7 @@ export const usePlanner = () => {
   const [templates, setTemplates] = useState<ShiftTemplate[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [holidays, setHolidays] = useState<string[]>([]);
+  const [logs, setLogs] = useState<Log[]>([]);
   
   // Shared settings
   const [backgroundImage, setSharedBackgroundImage] = useState<string | null>(null);
@@ -51,7 +53,6 @@ export const usePlanner = () => {
     } catch (err) {
       console.error("Failed to fetch data:", err);
       if (loading) {
-         // Keep existing data if we fail after first load, otherwise init empty
          if (users.length === 0) {
              setUsers([]);
              setTemplates([]);
@@ -61,6 +62,38 @@ export const usePlanner = () => {
          setLoading(false);
          setError("Mode hors ligne (Serveur non détecté).");
       }
+    }
+  };
+
+  const fetchLogs = async () => {
+    try {
+      const res = await fetch(LOGS_URL);
+      if (res.ok) {
+        const data = await res.json();
+        setLogs(data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch logs:", err);
+    }
+  };
+
+  const addLog = async (action: string, details: string, targetUserId?: string) => {
+    if (!currentUser) return;
+    try {
+      await fetch(LOGS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: currentUser.id,
+          userName: currentUser.name,
+          action,
+          details,
+          targetUserId
+        })
+      });
+      fetchLogs();
+    } catch (err) {
+      console.error("Failed to add log:", err);
     }
   };
 
@@ -90,7 +123,6 @@ export const usePlanner = () => {
       console.error("Failed to save data:", err);
       setError("Erreur de sauvegarde !");
     } finally {
-      // Small delay to ensure the server file write completes before we allow polling again
       setTimeout(() => {
         isSaving.current = false;
       }, 1000);
@@ -101,8 +133,10 @@ export const usePlanner = () => {
 
   useEffect(() => {
     fetchData();
+    fetchLogs();
     const intervalId = setInterval(() => {
         fetchData();
+        fetchLogs();
     }, 2000); 
 
     return () => clearInterval(intervalId);
@@ -114,20 +148,24 @@ export const usePlanner = () => {
     const nextUsers = [...users, user];
     setUsers(nextUsers);
     saveData(nextUsers, templates, assignments, holidays, backgroundImage);
+    addLog('ADD_USER', `A ajouté l'utilisateur ${user.name}`);
   };
 
   const removeUser = (id: string) => {
+    const userToRemove = users.find(u => u.id === id);
     const nextUsers = users.filter(u => u.id !== id);
     const nextAssignments = assignments.filter(a => a.userId !== id);
     setUsers(nextUsers);
     setAssignments(nextAssignments);
     saveData(nextUsers, templates, nextAssignments, holidays, backgroundImage);
+    if (userToRemove) addLog('REMOVE_USER', `A supprimé l'utilisateur ${userToRemove.name}`);
   };
 
   const updateUser = (updated: User) => {
       const nextUsers = users.map(u => u.id === updated.id ? updated : u);
       setUsers(nextUsers);
       saveData(nextUsers, templates, assignments, holidays, backgroundImage);
+      addLog('UPDATE_USER', `A mis à jour l'utilisateur ${updated.name}`);
   };
 
   const reorderUser = (id: string, direction: 'up' | 'down') => {
@@ -139,7 +177,6 @@ export const usePlanner = () => {
     const newUsers = [...users];
     const swapIndex = direction === 'up' ? index - 1 : index + 1;
     
-    // Swap elements
     [newUsers[index], newUsers[swapIndex]] = [newUsers[swapIndex], newUsers[index]];
     
     setUsers(newUsers);
@@ -150,9 +187,11 @@ export const usePlanner = () => {
     const nextTemplates = [...templates, tpl];
     setTemplates(nextTemplates);
     saveData(users, nextTemplates, assignments, holidays, backgroundImage);
+    addLog('ADD_TEMPLATE', `A ajouté le modèle ${tpl.label}`);
   };
 
   const removeTemplate = (id: string) => {
+    const tplToRemove = templates.find(t => t.id === id);
     const nextTemplates = templates.filter(t => t.id !== id);
     const nextAssignments = assignments.map(a => ({
       ...a,
@@ -161,16 +200,21 @@ export const usePlanner = () => {
     setTemplates(nextTemplates);
     setAssignments(nextAssignments);
     saveData(users, nextTemplates, nextAssignments, holidays, backgroundImage);
+    if (tplToRemove) addLog('REMOVE_TEMPLATE', `A supprimé le modèle ${tplToRemove.label}`);
   };
 
   const updateTemplate = (updated: ShiftTemplate) => {
       const nextTemplates = templates.map(t => t.id === updated.id ? updated : t);
       setTemplates(nextTemplates);
       saveData(users, nextTemplates, assignments, holidays, backgroundImage);
+      addLog('UPDATE_TEMPLATE', `A mis à jour le modèle ${updated.label}`);
   };
 
   const toggleAssignmentTemplate = (userId: string, date: Date, templateId: string) => {
     const dateStr = formatDateISO(date);
+    const user = users.find(u => u.id === userId);
+    const tpl = templates.find(t => t.id === templateId);
+    
     let nextAssignments = [...assignments];
     const existingIndex = nextAssignments.findIndex(a => a.userId === userId && a.date === dateStr);
       
@@ -181,8 +225,10 @@ export const usePlanner = () => {
       
       if (hasTemplate) {
         newTemplateIds = existing.templateIds.filter(id => id !== templateId);
+        if (user && tpl) addLog('REMOVE_ASSIGNMENT', `A retiré ${tpl.label} pour ${user.name} le ${dateStr}`, userId);
       } else {
         newTemplateIds = [...existing.templateIds, templateId];
+        if (user && tpl) addLog('ADD_ASSIGNMENT', `A ajouté ${tpl.label} pour ${user.name} le ${dateStr}`, userId);
       }
 
       if (newTemplateIds.length === 0 && !existing.customText) {
@@ -192,6 +238,7 @@ export const usePlanner = () => {
       }
     } else {
       nextAssignments.push({ id: generateId(), userId, date: dateStr, templateIds: [templateId], customText: '' });
+      if (user && tpl) addLog('ADD_ASSIGNMENT', `A ajouté ${tpl.label} pour ${user.name} le ${dateStr}`, userId);
     }
 
     setAssignments(nextAssignments);
@@ -200,6 +247,7 @@ export const usePlanner = () => {
 
   const updateAssignmentText = (userId: string, date: Date, text: string) => {
     const dateStr = formatDateISO(date);
+    const user = users.find(u => u.id === userId);
     let nextAssignments = [...assignments];
     const existingIndex = nextAssignments.findIndex(a => a.userId === userId && a.date === dateStr);
       
@@ -215,6 +263,8 @@ export const usePlanner = () => {
           nextAssignments.push({ id: generateId(), userId, date: dateStr, templateIds: [], customText: text });
       }
     }
+    
+    if (user && text) addLog('UPDATE_TEXT', `A mis à jour le texte pour ${user.name} le ${dateStr}`, userId);
     
     setAssignments(nextAssignments);
     saveData(users, templates, nextAssignments, holidays, backgroundImage);
@@ -243,9 +293,11 @@ export const usePlanner = () => {
 
   const clearAssignment = (userId: string, date: Date) => {
     const dateStr = formatDateISO(date);
+    const user = users.find(u => u.id === userId);
     const nextAssignments = assignments.filter(a => !(a.userId === userId && a.date === dateStr));
     setAssignments(nextAssignments);
     saveData(users, templates, nextAssignments, holidays, backgroundImage);
+    if (user) addLog('CLEAR_ASSIGNMENT', `A effacé le planning de ${user.name} le ${dateStr}`, userId);
   };
 
   const moveAssignment = (fromUserId: string, fromDate: Date, toUserId: string, toDate: Date) => {
@@ -255,6 +307,9 @@ export const usePlanner = () => {
 
       const sourceAssignment = assignments.find(a => a.userId === fromUserId && a.date === fromDateStr);
       if (!sourceAssignment) return; 
+
+      const fromUser = users.find(u => u.id === fromUserId);
+      const toUser = users.find(u => u.id === toUserId);
 
       let nextAssignments = [...assignments];
       nextAssignments = nextAssignments.filter(a => !(a.userId === fromUserId && a.date === fromDateStr));
@@ -276,6 +331,7 @@ export const usePlanner = () => {
 
       setAssignments(nextAssignments);
       saveData(users, templates, nextAssignments, holidays, backgroundImage);
+      if (fromUser && toUser) addLog('MOVE_ASSIGNMENT', `A déplacé le shift de ${fromUser.name} (${fromDateStr}) vers ${toUser.name} (${toDateStr})`);
   };
 
   const toggleHoliday = (date: Date) => {
@@ -283,8 +339,10 @@ export const usePlanner = () => {
       let nextHolidays = [...holidays];
       if (nextHolidays.includes(dateStr)) {
           nextHolidays = nextHolidays.filter(h => h !== dateStr);
+          addLog('REMOVE_HOLIDAY', `A retiré le jour férié du ${dateStr}`);
       } else {
           nextHolidays.push(dateStr);
+          addLog('ADD_HOLIDAY', `A ajouté un jour férié le ${dateStr}`);
       }
       setHolidays(nextHolidays);
       saveData(users, templates, assignments, nextHolidays, backgroundImage);
@@ -293,6 +351,7 @@ export const usePlanner = () => {
   const setBackgroundImage = (url: string | null) => {
       setSharedBackgroundImage(url);
       saveData(users, templates, assignments, holidays, url);
+      addLog('UPDATE_BG', `A mis à jour l'image de fond`);
   };
 
   const getAssignment = useCallback((userId: string, date: Date) => {
@@ -302,11 +361,12 @@ export const usePlanner = () => {
 
   return {
     loading, error,
-    users, addUser, removeUser, updateUser, reorderUser, // Exported reorderUser
+    users, addUser, removeUser, updateUser, reorderUser,
     templates, addTemplate, removeTemplate, updateTemplate,
     holidays, toggleHoliday,
     getAssignment, assignments,
     toggleAssignmentTemplate, updateAssignmentText, clearAssignment, replaceAssignment, moveAssignment,
-    backgroundImage, setBackgroundImage
+    backgroundImage, setBackgroundImage,
+    logs, fetchLogs
   };
 };
