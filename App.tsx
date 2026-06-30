@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { CalendarGrid } from './components/CalendarGrid';
+import { MonthTable } from './components/MonthTable';
 import { AdminPanel } from './components/AdminPanel';
 import { DisplaySettings } from './components/DisplaySettings';
 import { LoginModal } from './components/LoginModal';
@@ -14,6 +15,7 @@ const App: React.FC = () => {
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isDisplaySettingsOpen, setIsDisplaySettingsOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'week' | 'month'>('week');
   
   // Current User State (Authentication)
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(() => {
@@ -203,9 +205,20 @@ const App: React.FC = () => {
           </div>
           <div>
             <h1 className="text-lg font-bold text-slate-800 dark:text-white leading-tight">ShiftPlan Pro</h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                {error ? <span className="text-red-500 flex items-center gap-1"><AlertCircle className="w-3 h-3"/> Déconnecté</span> : 'En ligne - Synchronisé'}
-            </p>
+            <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => setViewMode('week')}
+                  className={`text-[10px] font-bold px-2 py-0.5 rounded transition-all ${viewMode === 'week' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+                >
+                  SEMAINE
+                </button>
+                <button 
+                  onClick={() => setViewMode('month')}
+                  className={`text-[10px] font-bold px-2 py-0.5 rounded transition-all ${viewMode === 'month' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+                >
+                  MOIS
+                </button>
+            </div>
           </div>
         </div>
         
@@ -260,26 +273,49 @@ const App: React.FC = () => {
         )}
         
         <div className="flex-1 h-full min-h-0">
-          <CalendarGrid 
-              currentDate={currentDate}
-              onDateChange={setCurrentDate}
-              users={sortedUsers} // Pass sorted users
-              hiddenUserIds={hiddenUserIds}
-              templates={templates}
-              holidays={holidays}
-              showWeekends={showWeekends}
-              moduleTheme={moduleTheme}
-              bgOpacity={bgOpacity} // Pass opacity for transparency
-              theme={theme} // Pass theme for color calculation
-              getAssignment={getAssignment}
-              onToggleTemplate={toggleAssignmentTemplate}
-              onUpdateText={updateAssignmentText}
-              onReplace={replaceAssignment}
-              onClear={clearAssignment}
-              onMoveAssignment={moveAssignment}
-              onToggleHoliday={toggleHoliday}
-              onOpenAdmin={() => setIsAdminOpen(true)}
-          />
+          {viewMode === 'week' ? (
+            <CalendarGrid 
+                currentDate={currentDate}
+                onDateChange={setCurrentDate}
+                users={sortedUsers}
+                hiddenUserIds={hiddenUserIds}
+                templates={templates}
+                holidays={holidays}
+                showWeekends={showWeekends}
+                moduleTheme={moduleTheme}
+                bgOpacity={bgOpacity}
+                theme={theme}
+                getAssignment={getAssignment}
+                onToggleTemplate={toggleAssignmentTemplate}
+                onUpdateText={updateAssignmentText}
+                onReplace={replaceAssignment}
+                onClear={clearAssignment}
+                onMoveAssignment={moveAssignment}
+                onToggleHoliday={toggleHoliday}
+                onOpenAdmin={() => setIsAdminOpen(true)}
+            />
+          ) : (
+            <MonthTable 
+                currentDate={currentDate}
+                onDateChange={setCurrentDate}
+                users={sortedUsers}
+                hiddenUserIds={hiddenUserIds}
+                templates={templates}
+                holidays={holidays}
+                showWeekends={showWeekends}
+                moduleTheme={moduleTheme}
+                bgOpacity={bgOpacity}
+                theme={theme}
+                getAssignment={getAssignment}
+                onToggleTemplate={toggleAssignmentTemplate}
+                onUpdateText={updateAssignmentText}
+                onReplace={replaceAssignment}
+                onClear={clearAssignment}
+                onMoveAssignment={moveAssignment}
+                onToggleHoliday={toggleHoliday}
+                onOpenAdmin={() => setIsAdminOpen(true)}
+            />
+          )}
         </div>
       </main>
 
