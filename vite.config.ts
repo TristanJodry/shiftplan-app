@@ -7,6 +7,9 @@ export default defineConfig({
     outDir: 'dist',
   },
   server: {
+    watch: {
+      ignored: ['**/db.json', '**/logs.json', '**/uploads/**']
+    },
     proxy: {
       '/api': 'http://localhost:3000'
     }

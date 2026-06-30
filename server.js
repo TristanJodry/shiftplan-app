@@ -39,7 +39,7 @@ const upload = multer({
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = process.env.PORT || 3000;
   const DB_FILE = path.join(__dirname, 'db.json');
   const LOGS_FILE = path.join(__dirname, 'logs.json');
   const UPLOADS_DIR = path.join(__dirname, 'uploads');

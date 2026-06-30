@@ -116,7 +116,7 @@ export const MonthTable: React.FC<MonthTableProps> = ({
       e.preventDefault();
       const assignment = getAssignment(userId, date);
       if (assignment) {
-        setClipboard({ templateIds: assignment.templateIds, customText: assignment.customText });
+        setClipboard({ templateIds: assignment.templateIds, customText: assignment.customText || '' });
       }
     }
     if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
