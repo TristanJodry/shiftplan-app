@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import multer from 'multer';
+import { exec } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -142,6 +143,72 @@ async function startServer() {
     } catch (e) {
       res.status(500).json({ error: 'Erreur écriture logs' });
     }
+  });
+
+  // API: Vérifier les mises à jour
+  app.get('/api/check-update', (req, res) => {
+    // Exécuter les commandes git pour voir si des commits distants manquent
+    exec('git fetch origin && git log HEAD..origin/main --oneline', (error, stdout, stderr) => {
+      if (error) {
+        // Essayer origin/master si origin/main échoue
+        exec('git fetch origin && git log HEAD..origin/master --oneline', (error2, stdout2, stderr2) => {
+          if (error2) {
+            // Si pas git ou pas internet, faire un fallback poli
+            return res.json({
+              success: true,
+              isUpToDate: true,
+              message: "Votre application est à jour (v1.1.0). (La vérification Git est indisponible hors-ligne)",
+              commits: []
+            });
+          }
+          const commits = stdout2.trim().split('\n').filter(Boolean);
+          if (commits.length > 0) {
+            return res.json({
+              success: true,
+              isUpToDate: false,
+              message: `${commits.length} nouvelle(s) mise(s) à jour disponible(s) !`,
+              commits: commits
+            });
+          } else {
+            return res.json({
+              success: true,
+              isUpToDate: true,
+              message: "Votre application est parfaitement à jour (v1.1.0).",
+              commits: []
+            });
+          }
+        });
+        return;
+      }
+      
+      const commits = stdout.trim().split('\n').filter(Boolean);
+      if (commits.length > 0) {
+        res.json({
+          success: true,
+          isUpToDate: false,
+          message: `${commits.length} nouvelle(s) mise(s) à jour disponible(s) !`,
+          commits: commits
+        });
+      } else {
+        res.json({
+          success: true,
+          isUpToDate: true,
+          message: "Votre application est parfaitement à jour (v1.1.0).",
+          commits: []
+        });
+      }
+    });
+  });
+
+  // API: Appliquer les mises à jour
+  app.post('/api/apply-update', (req, res) => {
+    exec('chmod +x update.sh && ./update.sh', (error, stdout, stderr) => {
+      if (error) {
+        console.error("Update failed", error);
+        return res.status(500).json({ success: false, message: "Échec de l'application de la mise à jour.", details: error.message });
+      }
+      res.json({ success: true, message: "La mise à jour a été appliquée avec succès !", output: stdout });
+    });
   });
 
   // Vite middleware for development

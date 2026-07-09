@@ -6,8 +6,9 @@ import { DisplaySettings } from './components/DisplaySettings';
 import { LoginModal } from './components/LoginModal';
 import { NotificationBell } from './components/NotificationBell';
 import { HistoryModal } from './components/HistoryModal';
+import { HelpModal } from './components/HelpModal';
 import { usePlanner } from './hooks/usePlanner';
-import { Loader2, AlertCircle, Moon, Sun, Layout, LogOut } from 'lucide-react';
+import { Loader2, AlertCircle, Moon, Sun, Layout, LogOut, HelpCircle } from 'lucide-react';
 import { CurrentUser } from './types';
 
 const App: React.FC = () => {
@@ -15,6 +16,7 @@ const App: React.FC = () => {
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isDisplaySettingsOpen, setIsDisplaySettingsOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'week' | 'month'>('week');
   
   // Current User State (Authentication)
@@ -121,11 +123,13 @@ const App: React.FC = () => {
     loading, error,
     users, addUser, removeUser, updateUser,
     templates, addTemplate, removeTemplate, updateTemplate,
-    holidays, toggleHoliday, moveAssignment,
+    holidays, toggleHoliday,
+    rtts, toggleRtt,
+    moveAssignment,
     getAssignment, 
     backgroundImage, setBackgroundImage,
     toggleAssignmentTemplate, updateAssignmentText, clearAssignment, replaceAssignment,
-    logs
+    logs, syncFrenchHolidays
   } = usePlanner(currentUser);
 
   const handleLogout = () => {
@@ -234,6 +238,14 @@ const App: React.FC = () => {
            </button>
 
            <button 
+             onClick={() => setIsHelpOpen(true)}
+             className="p-2 rounded-full text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 transition-colors"
+             title="Aide & Mises à jour"
+           >
+             <HelpCircle className="w-5 h-5" />
+           </button>
+
+           <button 
              onClick={toggleTheme}
              className="p-2 rounded-full text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 transition-colors"
              title={theme === 'dark' ? "Passer en mode clair" : "Passer en mode sombre"}
@@ -281,6 +293,7 @@ const App: React.FC = () => {
                 hiddenUserIds={hiddenUserIds}
                 templates={templates}
                 holidays={holidays}
+                rtts={rtts}
                 showWeekends={showWeekends}
                 moduleTheme={moduleTheme}
                 bgOpacity={bgOpacity}
@@ -292,6 +305,7 @@ const App: React.FC = () => {
                 onClear={clearAssignment}
                 onMoveAssignment={moveAssignment}
                 onToggleHoliday={toggleHoliday}
+                onToggleRtt={toggleRtt}
                 onOpenAdmin={() => setIsAdminOpen(true)}
             />
           ) : (
@@ -302,6 +316,7 @@ const App: React.FC = () => {
                 hiddenUserIds={hiddenUserIds}
                 templates={templates}
                 holidays={holidays}
+                rtts={rtts}
                 showWeekends={showWeekends}
                 moduleTheme={moduleTheme}
                 bgOpacity={bgOpacity}
@@ -313,6 +328,7 @@ const App: React.FC = () => {
                 onClear={clearAssignment}
                 onMoveAssignment={moveAssignment}
                 onToggleHoliday={toggleHoliday}
+                onToggleRtt={toggleRtt}
                 onOpenAdmin={() => setIsAdminOpen(true)}
             />
           )}
@@ -358,6 +374,13 @@ const App: React.FC = () => {
           bgOpacity={bgOpacity}
           onSetBgOpacity={setBgOpacity}
           onClose={() => setIsDisplaySettingsOpen(false)}
+        />
+      )}
+
+      {isHelpOpen && (
+        <HelpModal 
+          onClose={() => setIsHelpOpen(false)} 
+          syncFrenchHolidays={syncFrenchHolidays}
         />
       )}
     </div>

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { User, ShiftTemplate, Assignment } from '../types';
-import { getStartOfWeek, addDays, formatDateFr, formatDateISO } from '../utils/dateUtils';
+import { getStartOfWeek, addDays, formatDateFr, formatDateISO, getFrenchHolidayName } from '../utils/dateUtils';
 import { getModuleClasses } from '../constants';
 import { ChevronLeft, ChevronRight, Settings, Calendar as CalendarIcon, Check, Eraser, Plus, Type, Copy, Flag } from 'lucide-react';
 
@@ -11,6 +11,7 @@ interface CalendarGridProps {
   hiddenUserIds: string[];
   templates: ShiftTemplate[];
   holidays: string[];
+  rtts: string[];
   showWeekends: boolean;
   moduleTheme: 'solid' | 'pastel';
   bgOpacity: number; // New prop for transparency
@@ -22,11 +23,12 @@ interface CalendarGridProps {
   onClear: (userId: string, date: Date) => void;
   onMoveAssignment: (fromUserId: string, fromDate: Date, toUserId: string, toDate: Date) => void;
   onToggleHoliday: (date: Date) => void;
+  onToggleRtt: (date: Date) => void;
   onOpenAdmin: () => void;
 }
 
 export const CalendarGrid: React.FC<CalendarGridProps> = ({
-  currentDate, onDateChange, users, hiddenUserIds = [], templates, holidays, showWeekends, moduleTheme = 'solid', bgOpacity = 0.95, theme = 'light', getAssignment, onToggleTemplate, onUpdateText, onReplace, onClear, onMoveAssignment, onToggleHoliday, onOpenAdmin
+  currentDate, onDateChange, users, hiddenUserIds = [], templates, holidays, rtts = [], showWeekends, moduleTheme = 'solid', bgOpacity = 0.95, theme = 'light', getAssignment, onToggleTemplate, onUpdateText, onReplace, onClear, onMoveAssignment, onToggleHoliday, onToggleRtt, onOpenAdmin
 }) => {
   const startOfWeek = getStartOfWeek(currentDate);
   
@@ -212,19 +214,20 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                 const dateISO = formatDateISO(date);
                 const isToday = dateISO === todayISO;
                 const isHoliday = holidays.includes(dateISO);
-                // Header cells normally have specific colors for today/holiday, we mix them with opacity style if needed or rely on CSS classes and accept standard opacity
+                const isRtt = rtts.includes(dateISO);
+                // Header cells normally have specific colors for today/holiday/rtt, we mix them with opacity style if needed or rely on CSS classes and accept standard opacity
                 // To support transparency properly, we use the headerStyle as base and let the inner divs handle highlighting
                 return (
                   <th 
                     key={dateISO} 
                     className={`p-3 text-center border-b border-r dark:border-slate-700 min-w-[100px] md:min-w-[120px] relative overflow-hidden transition-colors`} 
-                    style={isToday ? { backgroundColor: theme === 'dark' ? '#1e3a8a' : '#eff6ff' } : isHoliday ? { backgroundColor: theme === 'dark' ? '#7f1d1d' : '#fef2f2' } : headerStyle}
+                    style={isToday ? { backgroundColor: theme === 'dark' ? '#1e3a8a' : '#eff6ff' } : isHoliday ? { backgroundColor: theme === 'dark' ? '#7f1d1d' : '#fef2f2' } : isRtt ? { backgroundColor: theme === 'dark' ? '#4c1d95' : '#f5f3ff' } : headerStyle}
                   >
                     <div className="flex flex-col items-center justify-center relative z-10">
-                      <span className={`text-xs uppercase font-bold mb-1 ${isToday ? 'text-blue-600 dark:text-blue-400' : isHoliday ? 'text-red-600 dark:text-red-400' : 'text-slate-400 dark:text-slate-500'}`}>
+                      <span className={`text-xs uppercase font-bold mb-1 ${isToday ? 'text-blue-600 dark:text-blue-400' : isHoliday ? 'text-red-600 dark:text-red-400' : isRtt ? 'text-purple-600 dark:text-purple-400' : 'text-slate-400 dark:text-slate-500'}`}>
                         {new Intl.DateTimeFormat('fr-FR', { weekday: 'short' }).format(date)}
                       </span>
-                      <span className={`text-xl font-light w-8 h-8 flex items-center justify-center rounded-full ${isToday ? 'bg-blue-600 text-white shadow-md' : isHoliday ? 'text-red-600 dark:text-red-400 font-normal ring-1 ring-red-200 dark:ring-red-800' : 'text-slate-700 dark:text-slate-300'}`}>
+                      <span className={`text-xl font-light w-8 h-8 flex items-center justify-center rounded-full ${isToday ? 'bg-blue-600 text-white shadow-md' : isHoliday ? 'text-red-600 dark:text-red-400 font-normal ring-1 ring-red-200 dark:ring-red-800' : isRtt ? 'text-purple-600 dark:text-purple-400 font-normal ring-1 ring-purple-200 dark:ring-purple-800' : 'text-slate-700 dark:text-slate-300'}`}>
                         {date.getDate()}
                       </span>
                     </div>
@@ -247,17 +250,28 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                   const assignment = getAssignment(user.id, date);
                   const activeTemplateIds = assignment?.templateIds || [];
                   const hasCustomText = !!assignment?.customText;
-                  const isEmpty = activeTemplateIds.length === 0 && !hasCustomText;
                   const isToday = dateISO === todayISO;
                   const isHoliday = holidays.includes(dateISO);
+                  const isRtt = rtts.includes(dateISO);
+                  const isEmpty = activeTemplateIds.length === 0 && !hasCustomText && !isHoliday && !isRtt;
                   const isSelected = selectedCell?.userId === user.id && selectedCell?.date.getTime() === date.getTime();
                   const isDragOver = dragOverCell?.userId === user.id && dragOverCell?.dateStr === dateISO;
 
                   return (
-                    <td key={dateISO} className={`p-1 border-b border-r dark:border-slate-700 cursor-pointer relative transition-all align-top h-20 md:h-24 outline-none ${isToday ? 'bg-blue-50/10 dark:bg-blue-900/10' : ''} ${isHoliday ? 'bg-red-50/30 dark:bg-red-900/10' : ''} ${isDragOver ? 'bg-blue-100 dark:bg-blue-800/50 ring-2 ring-inset ring-blue-400' : 'focus:bg-blue-50/30 dark:focus:bg-blue-900/20'}`} style={(!isToday && !isHoliday && !isDragOver) ? bgStyle : undefined} onClick={(e) => handleCellClick(e, user.id, date)} onDoubleClick={(e) => handleCellDoubleClick(e, user.id, date)} onKeyDown={(e) => handleKeyDown(e, user.id, date)} onDragOver={(e) => handleDragOver(e, user.id, date)} onDrop={(e) => handleDrop(e, user.id, date)} tabIndex={0}>
-                        <div className={`w-full h-full min-h-[4rem] rounded-md transition-all flex flex-col overflow-hidden relative z-10 ${isSelected ? 'ring-2 ring-blue-500 z-10' : ''} ${isEmpty ? 'border-2 border-dashed border-transparent hover:border-blue-200 dark:hover:border-slate-600' : 'bg-white dark:bg-slate-700 shadow-sm border border-slate-200 dark:border-slate-600'}`} draggable={!isEmpty} onDragStart={(e) => handleDragStart(e, user.id, date)} onDragEnd={handleDragEnd}>
+                    <td key={dateISO} className={`p-1 border-b border-r dark:border-slate-700 cursor-pointer relative transition-all align-top h-20 md:h-24 outline-none ${isToday ? 'bg-blue-50/10 dark:bg-blue-900/10' : ''} ${isHoliday ? 'bg-red-50/30 dark:bg-red-900/10' : ''} ${isRtt ? 'bg-purple-50/30 dark:bg-purple-900/10' : ''} ${isDragOver ? 'bg-blue-100 dark:bg-blue-800/50 ring-2 ring-inset ring-blue-400' : 'focus:bg-blue-50/30 dark:focus:bg-blue-900/20'}`} style={(!isToday && !isHoliday && !isRtt && !isDragOver) ? bgStyle : undefined} onClick={(e) => handleCellClick(e, user.id, date)} onDoubleClick={(e) => handleCellDoubleClick(e, user.id, date)} onKeyDown={(e) => handleKeyDown(e, user.id, date)} onDragOver={(e) => handleDragOver(e, user.id, date)} onDrop={(e) => handleDrop(e, user.id, date)} tabIndex={0}>
+                        <div className={`w-full h-full min-h-[4rem] rounded-md transition-all flex flex-col overflow-hidden relative z-10 ${isSelected ? 'ring-2 ring-blue-500 z-10' : ''} ${isEmpty ? 'border-2 border-dashed border-transparent hover:border-blue-200 dark:hover:border-slate-600' : 'bg-white dark:bg-slate-700 shadow-sm border border-slate-200 dark:border-slate-600'}`} draggable={!isEmpty && (activeTemplateIds.length > 0 || hasCustomText)} onDragStart={(e) => handleDragStart(e, user.id, date)} onDragEnd={handleDragEnd}>
                         {isEmpty ? (<div className="w-full h-full flex items-center justify-center"><Plus className={`w-5 h-5 text-slate-300 dark:text-slate-600 ${isSelected ? 'text-blue-400' : ''}`} /></div>) : (
                           <><div className="flex-1 flex flex-col w-full h-full">
+                                {isHoliday && (
+                                  <div className="flex-1 flex items-center justify-center bg-red-500 text-white dark:bg-red-600 px-1 md:px-2 text-[10px] md:text-xs font-bold py-1 w-full border-b border-black/10 last:border-0" title={getFrenchHolidayName(date) || "Jour Férié"}>
+                                    <span className="truncate text-center shadow-sm">{getFrenchHolidayName(date) || "Jour Férié"}</span>
+                                  </div>
+                                )}
+                                {isRtt && (
+                                  <div className="flex-1 flex items-center justify-center bg-purple-500 text-white dark:bg-purple-600 px-1 md:px-2 text-[10px] md:text-xs font-bold py-1 w-full border-b border-black/10 last:border-0" title="Jour RTT">
+                                    <span className="truncate text-center shadow-sm">RTT</span>
+                                  </div>
+                                )}
                                 {activeTemplateIds.map(tid => {
                                     const tpl = templates.find(t => t.id === tid);
                                     if (!tpl) return null;
@@ -265,7 +279,7 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                                     return (<div key={tid} className={`flex-1 flex items-center justify-center px-1 md:px-2 text-[10px] md:text-xs font-bold ${tplClass} w-full border-b border-black/10 last:border-0`} title={tpl.label}><span className="truncate text-center shadow-sm">{tpl.label}</span></div>);
                                 })}
                             </div>
-                            {hasCustomText && (<div className={`px-1 py-0.5 bg-yellow-50 dark:bg-yellow-900/30 text-[9px] md:text-[10px] text-slate-700 dark:text-yellow-100 leading-tight border-t border-slate-100 dark:border-slate-600 text-center truncate ${activeTemplateIds.length === 0 ? 'h-full flex items-center justify-center font-medium text-xs' : ''}`}>{assignment.customText}</div>)}</>
+                            {hasCustomText && (<div className={`px-1 py-0.5 bg-yellow-50 dark:bg-yellow-900/30 text-[9px] md:text-[10px] text-slate-700 dark:text-yellow-100 leading-tight border-t border-slate-100 dark:border-slate-600 text-center truncate ${activeTemplateIds.length === 0 && !isHoliday && !isRtt ? 'h-full flex items-center justify-center font-medium text-xs' : ''}`}>{assignment.customText}</div>)}</>
                         )}
                       </div>
                     </td>
@@ -295,14 +309,6 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
 
           <div className="h-px bg-slate-100 dark:bg-slate-700"></div>
 
-          <label className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer border border-transparent hover:border-slate-200 transition-all">
-             <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${holidays.includes(formatDateISO(popover.date)) ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-400 dark:bg-slate-700'}`}><Flag className="w-4 h-4" /></div>
-             <div className="flex-1"><div className="text-sm font-medium text-slate-800 dark:text-slate-200">Jour Férié</div><div className="text-[10px] text-slate-500 dark:text-slate-400">Pour toute l'équipe</div></div>
-             <input type="checkbox" className="w-4 h-4 rounded text-blue-600" checked={holidays.includes(formatDateISO(popover.date))} onChange={() => onToggleHoliday(popover.date!)} />
-          </label>
-
-          <div className="h-px bg-slate-100 dark:bg-slate-700"></div>
-
           <div className="space-y-1">
              <div className="text-xs font-bold text-slate-400 uppercase px-1 mb-2">Modules</div>
             {templates.map(tpl => {
@@ -318,6 +324,20 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                );
             })}
           </div>
+
+          <div className="h-px bg-slate-100 dark:bg-slate-700"></div>
+
+          <label className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer border border-transparent hover:border-slate-200 transition-all">
+             <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${holidays.includes(formatDateISO(popover.date)) ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-400 dark:bg-slate-700'}`}><Flag className="w-4 h-4" /></div>
+             <div className="flex-1"><div className="text-sm font-medium text-slate-800 dark:text-slate-200">Jour Férié</div><div className="text-[10px] text-slate-500 dark:text-slate-400">Pour toute l'équipe</div></div>
+             <input type="checkbox" className="w-4 h-4 rounded text-blue-600" checked={holidays.includes(formatDateISO(popover.date))} onChange={() => onToggleHoliday(popover.date!)} />
+          </label>
+
+          <label className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer border border-transparent hover:border-slate-200 transition-all">
+             <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${rtts.includes(formatDateISO(popover.date)) ? 'bg-purple-100 text-purple-600' : 'bg-slate-100 text-slate-400 dark:bg-slate-700'}`}><CalendarIcon className="w-4 h-4" /></div>
+             <div className="flex-1"><div className="text-sm font-medium text-slate-800 dark:text-slate-200">Jour RTT</div><div className="text-[10px] text-slate-500 dark:text-slate-400">Pour toute l'équipe</div></div>
+             <input type="checkbox" className="w-4 h-4 rounded text-blue-600" checked={rtts.includes(formatDateISO(popover.date))} onChange={() => onToggleRtt(popover.date!)} />
+          </label>
             
           <div className="h-px bg-slate-100 dark:bg-slate-700 sticky bottom-10 bg-white dark:bg-slate-800 z-10"></div>
           <button onClick={() => { onClear(popover.userId!, popover.date!); setPopover(prev => ({...prev, isOpen: false})); }} className="w-full text-left p-2 rounded-lg text-sm font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex items-center justify-center gap-2 sticky bottom-0 bg-white dark:bg-slate-800 z-10"><Eraser className="w-4 h-4" />Tout effacer</button>

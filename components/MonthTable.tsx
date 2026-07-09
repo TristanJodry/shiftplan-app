@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { User, ShiftTemplate, Assignment } from '../types';
-import { getStartOfMonth, addDays, formatDateISO, getEndOfMonth } from '../utils/dateUtils';
+import { getStartOfMonth, addDays, formatDateISO, getEndOfMonth, getFrenchHolidayName } from '../utils/dateUtils';
 import { getModuleClasses } from '../constants';
 import { ChevronLeft, ChevronRight, Settings, Calendar as CalendarIcon, Check, Eraser, Plus, Type, Flag } from 'lucide-react';
 
@@ -11,6 +11,7 @@ interface MonthTableProps {
   hiddenUserIds: string[];
   templates: ShiftTemplate[];
   holidays: string[];
+  rtts: string[];
   showWeekends: boolean;
   moduleTheme: 'solid' | 'pastel';
   bgOpacity: number;
@@ -22,11 +23,12 @@ interface MonthTableProps {
   onClear: (userId: string, date: Date) => void;
   onMoveAssignment: (fromUserId: string, fromDate: Date, toUserId: string, toDate: Date) => void;
   onToggleHoliday: (date: Date) => void;
+  onToggleRtt: (date: Date) => void;
   onOpenAdmin: () => void;
 }
 
 export const MonthTable: React.FC<MonthTableProps> = ({
-  currentDate, onDateChange, users, hiddenUserIds = [], templates, holidays, showWeekends, moduleTheme = 'solid', bgOpacity = 0.95, theme = 'light', getAssignment, onToggleTemplate, onUpdateText, onReplace, onClear, onMoveAssignment, onToggleHoliday, onOpenAdmin
+  currentDate, onDateChange, users, hiddenUserIds = [], templates, holidays, rtts = [], showWeekends, moduleTheme = 'solid', bgOpacity = 0.95, theme = 'light', getAssignment, onToggleTemplate, onUpdateText, onReplace, onClear, onMoveAssignment, onToggleHoliday, onToggleRtt, onOpenAdmin
 }) => {
   const startOfMonth = getStartOfMonth(currentDate);
   const endOfMonth = getEndOfMonth(currentDate);
@@ -213,19 +215,20 @@ export const MonthTable: React.FC<MonthTableProps> = ({
                 const dateISO = formatDateISO(date);
                 const isToday = dateISO === todayISO;
                 const isHoliday = holidays.includes(dateISO);
+                const isRtt = rtts.includes(dateISO);
                 const isWeekend = date.getDay() === 0 || date.getDay() === 6;
                 
                 return (
                   <th 
                     key={dateISO} 
                     className={`p-2 text-center border-b border-r dark:border-slate-700 min-w-[40px] relative transition-colors`} 
-                    style={isToday ? { backgroundColor: theme === 'dark' ? '#1e3a8a' : '#eff6ff' } : isHoliday ? { backgroundColor: theme === 'dark' ? '#7f1d1d' : '#fef2f2' } : headerStyle}
+                    style={isToday ? { backgroundColor: theme === 'dark' ? '#1e3a8a' : '#eff6ff' } : isHoliday ? { backgroundColor: theme === 'dark' ? '#7f1d1d' : '#fef2f2' } : isRtt ? { backgroundColor: theme === 'dark' ? '#4c1d95' : '#f5f3ff' } : headerStyle}
                   >
                     <div className="flex flex-col items-center justify-center relative z-10 scale-90">
-                      <span className={`text-[9px] uppercase font-bold mb-0.5 ${isToday ? 'text-blue-600 dark:text-blue-400' : isHoliday ? 'text-red-600 dark:text-red-400' : isWeekend ? 'text-slate-400' : 'text-slate-500'}`}>
+                      <span className={`text-[9px] uppercase font-bold mb-0.5 ${isToday ? 'text-blue-600 dark:text-blue-400' : isHoliday ? 'text-red-600 dark:text-red-400' : isRtt ? 'text-purple-600 dark:text-purple-400' : isWeekend ? 'text-slate-400' : 'text-slate-500'}`}>
                         {new Intl.DateTimeFormat('fr-FR', { weekday: 'narrow' }).format(date)}
                       </span>
-                      <span className={`text-sm font-bold w-6 h-6 flex items-center justify-center rounded-full ${isToday ? 'bg-blue-600 text-white shadow-sm' : isHoliday ? 'text-red-600 dark:text-red-400 font-black' : isWeekend ? 'text-slate-400' : 'text-slate-700 dark:text-slate-300'}`}>
+                      <span className={`text-sm font-bold w-6 h-6 flex items-center justify-center rounded-full ${isToday ? 'bg-blue-600 text-white shadow-sm' : isHoliday ? 'text-red-600 dark:text-red-400 font-black' : isRtt ? 'text-purple-600 dark:text-purple-400 font-black' : isWeekend ? 'text-slate-400' : 'text-slate-700 dark:text-slate-300'}`}>
                         {date.getDate()}
                       </span>
                     </div>
@@ -251,9 +254,10 @@ export const MonthTable: React.FC<MonthTableProps> = ({
                   const assignment = getAssignment(user.id, date);
                   const activeTemplateIds = assignment?.templateIds || [];
                   const hasCustomText = !!assignment?.customText;
-                  const isEmpty = activeTemplateIds.length === 0 && !hasCustomText;
                   const isToday = dateISO === todayISO;
                   const isHoliday = holidays.includes(dateISO);
+                  const isRtt = rtts.includes(dateISO);
+                  const isEmpty = activeTemplateIds.length === 0 && !hasCustomText && !isHoliday && !isRtt;
                   const isSelected = selectedCell?.userId === user.id && selectedCell?.date.getTime() === date.getTime();
                   const isWeekend = date.getDay() === 0 || date.getDay() === 6;
                   const isDragOver = dragOverCell?.userId === user.id && dragOverCell?.dateStr === dateISO;
@@ -261,9 +265,9 @@ export const MonthTable: React.FC<MonthTableProps> = ({
                   return (
                     <td 
                       key={dateISO} 
-                      draggable={!isEmpty}
-                      className={`p-0.5 border-b border-r dark:border-slate-700 cursor-pointer relative transition-all h-12 outline-none ${isToday ? 'bg-blue-50/10 dark:bg-blue-900/10' : ''} ${isHoliday ? 'bg-red-50/30 dark:bg-red-900/10' : isWeekend ? 'bg-slate-50/30 dark:bg-slate-800/30' : ''} ${isDragOver ? 'bg-blue-100/50 dark:bg-blue-800/50 scale-[1.02] shadow-inner z-10' : ''}`} 
-                      style={(!isToday && !isHoliday && !isWeekend && !isDragOver) ? bgStyle : undefined} 
+                      draggable={!isEmpty && (activeTemplateIds.length > 0 || hasCustomText)}
+                      className={`p-0.5 border-b border-r dark:border-slate-700 cursor-pointer relative transition-all h-12 outline-none ${isToday ? 'bg-blue-50/10 dark:bg-blue-900/10' : ''} ${isHoliday ? 'bg-red-50/30 dark:bg-red-900/10' : isRtt ? 'bg-purple-50/30 dark:bg-purple-900/10' : isWeekend ? 'bg-slate-50/30 dark:bg-slate-800/30' : ''} ${isDragOver ? 'bg-blue-100/50 dark:bg-blue-800/50 scale-[1.02] shadow-inner z-10' : ''}`} 
+                      style={(!isToday && !isHoliday && !isRtt && !isWeekend && !isDragOver) ? bgStyle : undefined} 
                       onClick={(e) => handleCellClick(e, user.id, date)} 
                       onDoubleClick={(e) => handleCellDoubleClick(e, user.id, date)} 
                       onKeyDown={(e) => handleKeyDown(e, user.id, date)} 
@@ -279,6 +283,16 @@ export const MonthTable: React.FC<MonthTableProps> = ({
                           </div>
                         ) : (
                           <div className="flex-1 flex flex-col w-full h-full">
+                            {isHoliday && (
+                              <div className="flex-1 flex items-center justify-center bg-red-500 text-white dark:bg-red-600 text-[8px] font-black py-0.5 px-0.5 w-full border-b border-black/5 last:border-0 shadow-sm" title={getFrenchHolidayName(date) || "Jour Férié"}>
+                                <span className="truncate text-center">F</span>
+                              </div>
+                            )}
+                            {isRtt && (
+                              <div className="flex-1 flex items-center justify-center bg-purple-500 text-white dark:bg-purple-600 text-[8px] font-black py-0.5 px-0.5 w-full border-b border-black/5 last:border-0 shadow-sm" title="Jour RTT">
+                                <span className="truncate text-center">RTT</span>
+                              </div>
+                            )}
                             {activeTemplateIds.map(tid => {
                                 const tpl = templates.find(t => t.id === tid);
                                 if (!tpl) return null;
@@ -293,7 +307,7 @@ export const MonthTable: React.FC<MonthTableProps> = ({
                                   </div>
                                 );
                             })}
-                            {hasCustomText && !activeTemplateIds.length && (
+                            {hasCustomText && !activeTemplateIds.length && !isHoliday && !isRtt && (
                               <div className="w-full h-full flex items-center justify-center bg-yellow-50 dark:bg-yellow-900/20">
                                 <Type className="w-3 h-3 text-yellow-600" />
                               </div>
@@ -332,14 +346,6 @@ export const MonthTable: React.FC<MonthTableProps> = ({
 
           <div className="h-px bg-slate-100 dark:bg-slate-700"></div>
 
-          <label className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer border border-transparent hover:border-slate-200 transition-all">
-             <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${holidays.includes(formatDateISO(popover.date)) ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-400 dark:bg-slate-700'}`}><Flag className="w-4 h-4" /></div>
-             <div className="flex-1"><div className="text-sm font-medium text-slate-800 dark:text-slate-200">Jour Férié</div></div>
-             <input type="checkbox" className="w-4 h-4 rounded text-blue-600" checked={holidays.includes(formatDateISO(popover.date))} onChange={() => onToggleHoliday(popover.date!)} />
-          </label>
-
-          <div className="h-px bg-slate-100 dark:bg-slate-700"></div>
-
           <div className="space-y-1">
             {templates.map(tpl => {
                const assignment = getAssignment(popover.userId!, popover.date!);
@@ -354,6 +360,20 @@ export const MonthTable: React.FC<MonthTableProps> = ({
                );
             })}
           </div>
+
+          <div className="h-px bg-slate-100 dark:bg-slate-700"></div>
+
+          <label className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer border border-transparent hover:border-slate-200 transition-all">
+             <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${holidays.includes(formatDateISO(popover.date)) ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-400 dark:bg-slate-700'}`}><Flag className="w-4 h-4" /></div>
+             <div className="flex-1"><div className="text-sm font-medium text-slate-800 dark:text-slate-200">Jour Férié</div></div>
+             <input type="checkbox" className="w-4 h-4 rounded text-blue-600" checked={holidays.includes(formatDateISO(popover.date))} onChange={() => onToggleHoliday(popover.date!)} />
+          </label>
+
+          <label className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer border border-transparent hover:border-slate-200 transition-all">
+             <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${rtts.includes(formatDateISO(popover.date)) ? 'bg-purple-100 text-purple-600' : 'bg-slate-100 text-slate-400 dark:bg-slate-700'}`}><CalendarIcon className="w-4 h-4" /></div>
+             <div className="flex-1"><div className="text-sm font-medium text-slate-800 dark:text-slate-200">Jour RTT</div></div>
+             <input type="checkbox" className="w-4 h-4 rounded text-blue-600" checked={rtts.includes(formatDateISO(popover.date))} onChange={() => onToggleRtt(popover.date!)} />
+          </label>
             
           <div className="h-px bg-slate-100 dark:bg-slate-700 sticky bottom-10 bg-white dark:bg-slate-800 z-10"></div>
           <button onClick={() => { onClear(popover.userId!, popover.date!); setPopover(prev => ({...prev, isOpen: false})); }} className="w-full text-left p-2 rounded-lg text-sm font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex items-center justify-center gap-2 sticky bottom-0 bg-white dark:bg-slate-800 z-10"><Eraser className="w-4 h-4" />Tout effacer</button>
