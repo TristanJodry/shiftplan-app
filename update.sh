@@ -85,8 +85,23 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+# 6. Redémarrage du service (si installé)
+if systemctl is-active --quiet shiftplan; then
+    echo -e "${YELLOW}Redémarrage du service systemd 'shiftplan'...${NC}"
+    sudo systemctl restart shiftplan
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}[SUCCÈS] Le service a été redémarré automatiquement.${NC}"
+    else
+        echo -e "${RED}[ERREUR] Impossible de redémarrer le service automatiquement.${NC}"
+    fi
+fi
+
 echo -e "\n${GREEN}====================================================${NC}"
 echo -e "${GREEN_BOLD}  [SUCCÈS] Mises à jour appliquées et build complété !  ${NC}"
-echo -e "${GREEN}  Relancez votre service ou exécutez 'npm start'      ${NC}"
+if systemctl is-active --quiet shiftplan; then
+    echo -e "${GREEN}  L'application a été mise à jour et redémarrée.      ${NC}"
+else
+    echo -e "${GREEN}  Relancez votre service ou exécutez 'npm start'      ${NC}"
+fi
 echo -e "${GREEN}====================================================${NC}"
 exit 0
