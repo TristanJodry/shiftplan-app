@@ -8,3 +8,5 @@ logs.json
 uploads
 .DS_Store
 *.log
+update.log
+planner-data.json

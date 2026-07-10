@@ -17,7 +17,8 @@ export const HelpModal: React.FC<HelpModalProps> = ({ onClose, syncFrenchHoliday
   } | null>(null);
 
   const [updating, setUpdating] = useState(false);
-  const [updateResult, setUpdateResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [updateResult, setUpdateResult] = useState<{ success: boolean; message: string; logs?: string } | null>(null);
+  const [showLogs, setShowLogs] = useState(false);
 
   const [syncingHolidays, setSyncingHolidays] = useState(false);
   const [holidaySyncStatus, setHolidaySyncStatus] = useState<{ success: boolean; count?: number; message: string } | null>(null);
@@ -54,13 +55,15 @@ export const HelpModal: React.FC<HelpModalProps> = ({ onClose, syncFrenchHoliday
   const handleApplyUpdate = async () => {
     setUpdating(true);
     setUpdateResult(null);
+    setShowLogs(false);
     try {
       const response = await fetch('/api/apply-update', { method: 'POST' });
       const data = await response.json();
       if (data.success) {
         setUpdateResult({
           success: true,
-          message: data.message || "La mise à jour a été appliquée avec succès ! L'application redémarre."
+          message: data.message || "La mise à jour a été appliquée avec succès ! L'application redémarre.",
+          logs: data.output
         });
         setTimeout(() => {
           window.location.reload();
@@ -68,7 +71,8 @@ export const HelpModal: React.FC<HelpModalProps> = ({ onClose, syncFrenchHoliday
       } else {
         setUpdateResult({
           success: false,
-          message: data.message || "Impossible d'appliquer la mise à jour."
+          message: data.message || "Impossible d'appliquer la mise à jour.",
+          logs: (data.stdout || '') + '\n' + (data.stderr || '') + '\n' + (data.details || '')
         });
       }
     } catch (err) {
@@ -242,8 +246,24 @@ sudo systemctl status shiftplan`;
                   )}
 
                   {updateResult && (
-                    <div className={`mt-2 p-2.5 rounded border text-[11px] font-semibold ${updateResult.success ? 'bg-emerald-100 dark:bg-emerald-950/40 border-emerald-200 text-emerald-800 dark:text-emerald-300' : 'bg-red-100 dark:bg-red-950/40 border-red-200 text-red-800 dark:text-red-300'}`}>
-                      {updateResult.message}
+                    <div className="space-y-2">
+                      <div className={`p-2.5 rounded border text-[11px] font-semibold flex items-center justify-between ${updateResult.success ? 'bg-emerald-100 dark:bg-emerald-950/40 border-emerald-200 text-emerald-800 dark:text-emerald-300' : 'bg-red-100 dark:bg-red-950/40 border-red-200 text-red-800 dark:text-red-300'}`}>
+                        <span>{updateResult.message}</span>
+                        {updateResult.logs && (
+                          <button 
+                            onClick={() => setShowLogs(!showLogs)}
+                            className="text-[10px] underline hover:no-underline"
+                          >
+                            {showLogs ? 'Masquer les logs' : 'Voir les logs'}
+                          </button>
+                        )}
+                      </div>
+                      
+                      {showLogs && updateResult.logs && (
+                        <div className="bg-slate-900 rounded-lg p-3 text-slate-300 font-mono text-[10px] max-h-40 overflow-y-auto border border-slate-700">
+                          <pre className="whitespace-pre-wrap">{updateResult.logs}</pre>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -283,10 +303,16 @@ sudo systemctl status shiftplan`;
 
         {/* Footer */}
         <div className="p-4 border-t dark:border-slate-800 bg-slate-50 dark:bg-slate-900 rounded-b-2xl flex items-center justify-between text-xs text-slate-500">
-          <span className="flex items-center gap-1">
-            <Terminal className="w-3.5 h-3.5 text-slate-400" />
-            <span>Bash scripts inclus : `setup.sh` & `update.sh`</span>
-          </span>
+          <div className="flex items-center gap-4">
+            <span className="flex items-center gap-1">
+              <Terminal className="w-3.5 h-3.5 text-slate-400" />
+              <span>Scripts : `setup.sh` & `update.sh`</span>
+            </span>
+            <span className="flex items-center gap-1">
+              <RefreshCw className="w-3.5 h-3.5 text-slate-400" />
+              <span>Logs : `update.log`</span>
+            </span>
+          </div>
           <span>ShiftPlan Pro © 2026</span>
         </div>
 

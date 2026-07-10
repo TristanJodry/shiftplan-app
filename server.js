@@ -205,10 +205,28 @@ async function startServer() {
     exec('chmod +x update.sh && ./update.sh', (error, stdout, stderr) => {
       if (error) {
         console.error("Update failed", error);
-        return res.status(500).json({ success: false, message: "Échec de l'application de la mise à jour.", details: error.message });
+        // On renvoie stdout et stderr pour aider au débugging
+        return res.status(500).json({ 
+          success: false, 
+          message: "Échec de l'application de la mise à jour. Consultez les logs pour plus de détails.", 
+          details: error.message,
+          stdout: stdout,
+          stderr: stderr
+        });
       }
       res.json({ success: true, message: "La mise à jour a été appliquée avec succès !", output: stdout });
     });
+  });
+
+  // API: Lire les logs de mise à jour
+  app.get('/api/update-log', (req, res) => {
+    const logPath = path.join(process.cwd(), 'update.log');
+    if (fs.existsSync(logPath)) {
+      const logContent = fs.readFileSync(logPath, 'utf8');
+      res.json({ success: true, content: logContent });
+    } else {
+      res.status(404).json({ success: false, message: "Aucun log de mise à jour trouvé." });
+    }
   });
 
   // Vite middleware for development
