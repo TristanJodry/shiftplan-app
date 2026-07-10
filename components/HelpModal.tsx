@@ -148,7 +148,7 @@ sudo systemctl status shiftplan`;
             </div>
             <div>
               <h2 className="text-lg font-bold text-slate-900 dark:text-white">Aide & Mises à jour</h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400">ShiftPlan Pro v1.1.0 • Stable</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">ShiftPlan Pro v1.2.0 • Stable</p>
             </div>
           </div>
           <button 

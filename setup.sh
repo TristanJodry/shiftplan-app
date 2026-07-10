@@ -97,20 +97,39 @@ EOF
 
 echo -e "${GREEN}[OK] Fichier de configuration systemd généré : 'shiftplan.service'${NC}"
 
+# Fonction pour exécuter avec sudo si nécessaire
+run_as_sudo() {
+    if [ "$EUID" -ne 0 ]; then
+        if command -v sudo &> /dev/null; then
+            sudo "$@"
+        else
+            echo -e "${RED}[ERREUR] Cette opération nécessite des privilèges root mais 'sudo' n'est pas installé.${NC}"
+            return 1
+        fi
+    else
+        "$@"
+    fi
+}
+
 read -p "Souhaitez-vous installer et activer ShiftPlan Pro en tant que service système (systemd) ? [y/N] : " INSTALL_SERVICE
 if [[ "$INSTALL_SERVICE" =~ ^[yY](es|es)?$ ]]; then
-    echo -e "${YELLOW}Installation du service (nécessite les privilèges sudo)...${NC}"
-    sudo cp shiftplan.service /etc/systemd/system/shiftplan.service
-    sudo systemctl daemon-reload
-    sudo systemctl enable shiftplan
-    sudo systemctl start shiftplan
+    echo -e "${YELLOW}Installation du service...${NC}"
+    run_as_sudo cp shiftplan.service /etc/systemd/system/shiftplan.service
+    run_as_sudo systemctl daemon-reload
+    run_as_sudo systemctl enable shiftplan
+    run_as_sudo systemctl start shiftplan
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}[OK] Le service a été installé et démarré avec succès !${NC}"
     else
-        echo -e "${RED}[ERREUR] Échec de l'installation du service. Vérifiez vos permissions sudo.${NC}"
+        echo -e "${RED}[ERREUR] Échec de l'installation du service.${NC}"
     fi
 else
     echo -e "${BLUE}Installation du service ignorée.${NC}"
+fi
+
+SUDO_PREFIX=""
+if [ "$EUID" -ne 0 ] && command -v sudo &> /dev/null; then
+    SUDO_PREFIX="sudo "
 fi
 
 echo -e "\n${GREEN}====================================================${NC}"
@@ -118,16 +137,16 @@ echo -e "${GREEN}${BOLD}      CONFIGURATION DE SHIFTPLAN PRO TERMINÉE !      ${
 echo -e "${GREEN}====================================================${NC}"
 if systemctl is-active --quiet shiftplan; then
     echo -e "L'application tourne actuellement en tant que service systemd."
-    echo -e "Statut : ${BOLD}sudo systemctl status shiftplan${NC}"
+    echo -e "Statut : ${BOLD}${SUDO_PREFIX}systemctl status shiftplan${NC}"
 else
     echo -e "Pour démarrer l'application manuellement :"
     echo -e "  ${BOLD}npm start${NC}"
     echo ""
     echo -e "Si vous n'avez pas installé le service automatiquement :"
-    echo -e "  1. Copiez le fichier service : ${BOLD}sudo cp shiftplan.service /etc/systemd/system/shiftplan.service${NC}"
-    echo -e "  2. Rechargez systemd :         ${BOLD}sudo systemctl daemon-reload${NC}"
-    echo -e "  3. Activez au démarrage :      ${BOLD}sudo systemctl enable shiftplan${NC}"
-    echo -e "  4. Démarrez le service :       ${BOLD}sudo systemctl start shiftplan${NC}"
+    echo -e "  1. Copiez le fichier service : ${BOLD}${SUDO_PREFIX}cp shiftplan.service /etc/systemd/system/shiftplan.service${NC}"
+    echo -e "  2. Rechargez systemd :         ${BOLD}${SUDO_PREFIX}systemctl daemon-reload${NC}"
+    echo -e "  3. Activez au démarrage :      ${BOLD}${SUDO_PREFIX}systemctl enable shiftplan${NC}"
+    echo -e "  4. Démarrez le service :       ${BOLD}${SUDO_PREFIX}systemctl start shiftplan${NC}"
 fi
 echo -e "===================================================="
 exit 0

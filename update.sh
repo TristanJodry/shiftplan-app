@@ -100,10 +100,24 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+# Fonction pour exécuter avec sudo si nécessaire
+run_as_sudo() {
+    if [ "$EUID" -ne 0 ]; then
+        if command -v sudo &> /dev/null; then
+            sudo "$@"
+        else
+            log "${RED}[ERREUR] Cette opération nécessite des privilèges root mais 'sudo' n'est pas installé.${NC}"
+            return 1
+        fi
+    else
+        "$@"
+    fi
+}
+
 # 6. Redémarrage du service (si installé)
 if systemctl is-active --quiet shiftplan; then
     log "${YELLOW}Redémarrage du service systemd 'shiftplan'...${NC}"
-    sudo systemctl restart shiftplan >> "$LOG_FILE" 2>&1
+    run_as_sudo systemctl restart shiftplan >> "$LOG_FILE" 2>&1
     if [ $? -eq 0 ]; then
         log "${GREEN}[SUCCÈS] Le service a été redémarré automatiquement.${NC}"
     else
