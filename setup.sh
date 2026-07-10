@@ -80,15 +80,16 @@ CURRENT_USER=$(whoami)
 
 cat <<EOF > shiftplan.service
 [Unit]
-Description=ShiftPlan Pro Service
+Description=ShiftPlan Pro - Gestion de Planning
 After=network.target
 
 [Service]
 Type=simple
 User=$CURRENT_USER
 WorkingDirectory=$CURRENT_DIR
-ExecStart=/usr/bin/npm start
-Restart=on-failure
+ExecStart=$(command -v node) server.js
+Restart=always
+Environment=NODE_ENV=production
 Environment=PORT=$PORT
 
 [Install]
