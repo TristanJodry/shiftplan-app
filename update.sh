@@ -12,10 +12,15 @@ log() {
 # Configuration des couleurs
 RED='\033[0;31m'
 GREEN='\033[0;32m'
+GREEN_BOLD='\033[1;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0;3m' # No Color
+BLUE_BOLD='\033[1;34m'
+NC='\033[0m' # No Color
 NC_BOLD='\033[1m'
+
+# Extraire la version actuelle
+VERSION=$(grep '"version":' package.json | cut -d'"' -f4)
 
 log "${BLUE}====================================================${NC}"
 log "${BLUE_BOLD}          SHIFTPLAN PRO - MISE À JOUR & LOGS        ${NC}"
@@ -60,7 +65,7 @@ if [ -z "$REMOTE" ]; then
 fi
 
 if [ "$LOCAL" = "$REMOTE" ]; then
-    log "${GREEN}[SUCCÈS] Votre application est déjà parfaitement à jour. Aucune action requise !${NC}"
+    log "${GREEN}[SUCCÈS] Shiftplan est à jour (v${VERSION})${NC}"
     exit 0
 fi
 
@@ -126,11 +131,12 @@ if systemctl is-active --quiet shiftplan; then
 fi
 
 log "\n${GREEN}====================================================${NC}"
-log "${GREEN_BOLD}  [SUCCÈS] Mises à jour appliquées et build complété !  ${NC}"
-if systemctl is-active --quiet shiftplan; then
-    log "${GREEN}  L'application a été mise à jour et redémarrée.      ${NC}"
-else
-    log "${GREEN}  Relancez votre service ou exécutez 'npm start'      ${NC}"
-fi
+log "${GREEN_BOLD}      SHIFTPLAN A ÉTÉ MIS À JOUR (v${VERSION})      ${NC}"
 log "${GREEN}====================================================${NC}"
+if systemctl is-active --quiet shiftplan; then
+    log "${GREEN}Statut : Service redémarré avec succès.${NC}"
+else
+    log "${YELLOW}Note : Relancez manuellement avec 'npm start'${NC}"
+fi
+echo -e "\n"
 exit 0
