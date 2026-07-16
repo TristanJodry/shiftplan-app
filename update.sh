@@ -11,6 +11,15 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Fonction pour exécuter en tant qu'utilisateur non-root (si lancé via sudo)
+run_as_user() {
+    if [ -n "$SUDO_USER" ] && [ "$SUDO_USER" != "root" ]; then
+        sudo -u "$SUDO_USER" "$@"
+    else
+        "$@"
+    fi
+}
+
 echo -e "${BLUE}====================================================${NC}"
 echo -e "${BLUE}          SHIFTPLAN PRO - PORTAIL DE MISE À JOUR    ${NC}"
 echo -e "${BLUE}====================================================${NC}"
@@ -27,20 +36,20 @@ if [ ! -d .git ]; then
 fi
 
 # Déterminer la branche active
-BRANCH=$(git rev-parse --abbrev-ref HEAD)
+BRANCH=$(run_as_user git rev-parse --abbrev-ref HEAD)
 
 # 2. Récupérer et appliquer la mise à jour de manière sécurisée
 echo -e "${YELLOW}Vérification et téléchargement des mises à jour depuis GitHub (${BRANCH})...${NC}"
 
 # Mettre de côté temporairement toutes les modifications locales (y compris dans update.sh)
-git stash >> "$LOG_FILE" 2>&1
+run_as_user git stash >> "$LOG_FILE" 2>&1
 
 # Pull les dernières modifications
-git pull origin ${BRANCH} >> "$LOG_FILE" 2>&1
+run_as_user git pull origin ${BRANCH} >> "$LOG_FILE" 2>&1
 PULL_STATUS=$?
 
 # Restaurer les modifications locales de l'utilisateur
-git stash pop >> "$LOG_FILE" 2>&1
+run_as_user git stash pop >> "$LOG_FILE" 2>&1
 
 if [ $PULL_STATUS -ne 0 ]; then
     echo -e "${RED}[ERREUR] Échec du téléchargement des mises à jour via 'git pull'.${NC}"
