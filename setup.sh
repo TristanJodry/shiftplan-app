@@ -76,13 +76,39 @@ if [ $? -ne 0 ]; then
 fi
 echo -e "${GREEN}[OK] Compilation de production terminée.${NC}"
 
-# 5. Génération et installation du fichier service Systemd
-echo -e "\n${YELLOW}[5/5] Configuration du service Systemd...${NC}"
+# 5. Choix du mode de déploiement et configuration
+echo -e "\n${YELLOW}[5/5] Choix du mode de déploiement...${NC}"
+echo -e "Comment souhaitez-vous déployer ShiftPlan Pro ?"
+echo -e "  1) Service système classique (Systemd) - Recommandé pour VPS/Serveur dédié Linux"
+echo -e "  2) Conteneur Docker - Recommandé pour la portabilité et le cloud"
+echo -e "  3) Aucun (Lancement manuel)"
+read -p "Sélectionnez une option [1-3] (Défaut: 1) : " DEPLOY_MODE
+DEPLOY_MODE=${DEPLOY_MODE:-1}
 
-CURRENT_DIR=$(pwd)
-CURRENT_USER=$(whoami)
+# Initialiser les variables de suivi
+DOCKER_STARTED=false
+SYSTEMD_STARTED=false
 
-cat <<EOF > shiftplan.service
+# Fonction pour exécuter avec sudo si nécessaire
+run_as_sudo() {
+    if [ "$EUID" -ne 0 ]; then
+        if command -v sudo &> /dev/null; then
+            sudo "$@"
+        else
+            echo -e "${RED}[ERREUR] Cette opération nécessite des privilèges root mais 'sudo' n'est pas installé.${NC}"
+            return 1
+        fi
+    else
+        "$@"
+    fi
+}
+
+if [ "$DEPLOY_MODE" = "1" ]; then
+    echo -e "\n${YELLOW}Configuration du service Systemd...${NC}"
+    CURRENT_DIR=$(pwd)
+    CURRENT_USER=$(whoami)
+
+    cat <<EOF > shiftplan.service
 [Unit]
 Description=ShiftPlan Pro - Gestion de Planning
 After=network.target
@@ -102,36 +128,77 @@ Environment=PORT=$PORT
 WantedBy=multi-user.target
 EOF
 
-echo -e "${GREEN}[OK] Fichier de configuration systemd généré : 'shiftplan.service'${NC}"
+    echo -e "${GREEN}[OK] Fichier de configuration systemd généré : 'shiftplan.service'${NC}"
 
-# Fonction pour exécuter avec sudo si nécessaire
-run_as_sudo() {
-    if [ "$EUID" -ne 0 ]; then
-        if command -v sudo &> /dev/null; then
-            sudo "$@"
+    read -p "Souhaitez-vous installer et activer ShiftPlan Pro en tant que service système (systemd) ? [y/N] : " INSTALL_SERVICE
+    if [[ "$INSTALL_SERVICE" =~ ^[yY](es|es)?$ ]]; then
+        echo -e "${YELLOW}Installation du service...${NC}"
+        run_as_sudo cp shiftplan.service /etc/systemd/system/shiftplan.service
+        run_as_sudo systemctl daemon-reload
+        run_as_sudo systemctl enable shiftplan
+        run_as_sudo systemctl start shiftplan
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}[OK] Le service a été installé et démarré avec succès !${NC}"
+            SYSTEMD_STARTED=true
         else
-            echo -e "${RED}[ERREUR] Cette opération nécessite des privilèges root mais 'sudo' n'est pas installé.${NC}"
-            return 1
+            echo -e "${RED}[ERREUR] Échec de l'installation du service.${NC}"
         fi
     else
-        "$@"
+        echo -e "${BLUE}Installation du service ignorée.${NC}"
     fi
-}
 
-read -p "Souhaitez-vous installer et activer ShiftPlan Pro en tant que service système (systemd) ? [y/N] : " INSTALL_SERVICE
-if [[ "$INSTALL_SERVICE" =~ ^[yY](es|es)?$ ]]; then
-    echo -e "${YELLOW}Installation du service...${NC}"
-    run_as_sudo cp shiftplan.service /etc/systemd/system/shiftplan.service
-    run_as_sudo systemctl daemon-reload
-    run_as_sudo systemctl enable shiftplan
-    run_as_sudo systemctl start shiftplan
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}[OK] Le service a été installé et démarré avec succès !${NC}"
+elif [ "$DEPLOY_MODE" = "2" ]; then
+    echo -e "\n${YELLOW}Configuration de l'environnement Docker...${NC}"
+    
+    # S'assurer que les fichiers de persistance existent pour éviter que Docker crée des dossiers vides
+    touch db.json logs.json
+    mkdir -p uploads
+
+    # Écrire le fichier docker-compose.yml
+    cat <<EOF > docker-compose.yml
+version: '3.8'
+
+services:
+  shiftplan:
+    build: .
+    container_name: shiftplan-pro
+    restart: always
+    ports:
+      - "$PORT:3000"
+    volumes:
+      - ./db.json:/app/db.json
+      - ./logs.json:/app/logs.json
+      - ./uploads:/app/uploads
+EOF
+    echo -e "${GREEN}[OK] Fichier 'docker-compose.yml' généré ! (Port mappé : $PORT -> 3000)${NC}"
+
+    if command -v docker &> /dev/null; then
+        read -p "Souhaitez-vous construire et démarrer le conteneur Docker maintenant ? [y/N] : " RUN_DOCKER
+        if [[ "$RUN_DOCKER" =~ ^[yY](es|es)?$ ]]; then
+            echo -e "${YELLOW}Construction et lancement du conteneur...${NC}"
+            
+            # Utiliser le format de commande de composition disponible
+            if command -v docker-compose &> /dev/null; then
+                docker-compose up -d --build
+            elif docker compose version &> /dev/null; then
+                docker compose up -d --build
+            else
+                docker build -t shiftplan-pro .
+                docker run -d -p $PORT:3000 --name shiftplan-pro -v $(pwd)/db.json:/app/db.json -v $(pwd)/logs.json:/app/logs.json -v $(pwd)/uploads:/app/uploads --restart always shiftplan-pro
+            fi
+
+            if [ $? -eq 0 ]; then
+                echo -e "${GREEN}[OK] Le conteneur Docker a été lancé avec succès !${NC}"
+                DOCKER_STARTED=true
+            else
+                echo -e "${RED}[ERREUR] Impossible de lancer le conteneur. Vérifiez le démon Docker.${NC}"
+            fi
+        fi
     else
-        echo -e "${RED}[ERREUR] Échec de l'installation du service.${NC}"
+        echo -e "${YELLOW}[INFO] 'docker' n'est pas détecté. Vous pourrez exécuter le conteneur manuellement plus tard.${NC}"
     fi
 else
-    echo -e "${BLUE}Installation du service ignorée.${NC}"
+    echo -e "${BLUE}Déploiement automatique ignoré.${NC}"
 fi
 
 SUDO_PREFIX=""
@@ -142,18 +209,27 @@ fi
 echo -e "\n${GREEN}====================================================${NC}"
 echo -e "${GREEN}${BOLD}      SHIFTPLAN PRO v${VERSION} - CONFIGURATION TERMINÉE !      ${NC}"
 echo -e "${GREEN}====================================================${NC}"
-if systemctl is-active --quiet shiftplan; then
-    echo -e "L'application tourne actuellement en tant que service systemd."
-    echo -e "Statut : ${BOLD}${SUDO_PREFIX}systemctl status shiftplan${NC}"
+
+if [ "$DEPLOY_MODE" = "1" ]; then
+    if [ "$SYSTEMD_STARTED" = true ] || systemctl is-active --quiet shiftplan; then
+        echo -e "L'application tourne en tâche de fond en tant que service systemd."
+        echo -e "Statut : ${BOLD}${SUDO_PREFIX}systemctl status shiftplan${NC}"
+    else
+        echo -e "Pour démarrer manuellement le service :"
+        echo -e "  ${BOLD}${SUDO_PREFIX}systemctl start shiftplan${NC}"
+    fi
+elif [ "$DEPLOY_MODE" = "2" ]; then
+    if [ "$DOCKER_STARTED" = true ]; then
+        echo -e "Le conteneur Docker tourne actuellement en arrière-plan."
+        echo -e "Suivi : ${BOLD}docker ps${NC} ou ${BOLD}docker compose ps${NC}"
+        echo -e "Logs :  ${BOLD}docker compose logs -f${NC}"
+    else
+        echo -e "Pour démarrer votre conteneur Docker :"
+        echo -e "  ${BOLD}docker compose up -d --build${NC}"
+    fi
 else
     echo -e "Pour démarrer l'application manuellement :"
     echo -e "  ${BOLD}npm start${NC}"
-    echo ""
-    echo -e "Si vous n'avez pas installé le service automatiquement :"
-    echo -e "  1. Copiez le fichier service : ${BOLD}${SUDO_PREFIX}cp shiftplan.service /etc/systemd/system/shiftplan.service${NC}"
-    echo -e "  2. Rechargez systemd :         ${BOLD}${SUDO_PREFIX}systemctl daemon-reload${NC}"
-    echo -e "  3. Activez au démarrage :      ${BOLD}${SUDO_PREFIX}systemctl enable shiftplan${NC}"
-    echo -e "  4. Démarrez le service :       ${BOLD}${SUDO_PREFIX}systemctl start shiftplan${NC}"
 fi
 echo -e "===================================================="
 exit 0
